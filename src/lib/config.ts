@@ -65,3 +65,65 @@ export function detectPackageManager(
 export function getPackageManager(config?: BootConfig): string {
   return config?.packageManager || detectPackageManager();
 }
+
+/**
+ * Detect Python tooling: uv (preferred) or pip.
+ */
+export function detectPythonTool(
+  dir: string = process.cwd()
+): "uv" | "pip" | null {
+  const hasUvLock = fs.existsSync(path.join(dir, "uv.lock"));
+  const hasPyProject = fs.existsSync(path.join(dir, "pyproject.toml"));
+  const hasRequirements = fs.existsSync(path.join(dir, "requirements.txt"));
+
+  if (hasUvLock || hasPyProject) return "uv";
+  if (hasRequirements) return "pip";
+  return null;
+}
+
+export interface PyProjectInfo {
+  /** Package name from [project] */
+  name: string;
+  /** First entry point from [project.scripts], or name if not set */
+  scriptName: string;
+}
+
+/**
+ * Parse pyproject.toml for project name and main script (minimal TOML parsing).
+ */
+export function getPyProjectInfo(
+  dir: string = process.cwd()
+): PyProjectInfo | null {
+  const pyPath = path.join(dir, "pyproject.toml");
+  if (!fs.existsSync(pyPath)) return null;
+
+  const raw = fs.readFileSync(pyPath, "utf-8");
+  let name: string | null = null;
+  let scriptName: string | null = null;
+  let inProject = false;
+  let inScripts = false;
+
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("[")) {
+      inProject = trimmed === "[project]";
+      inScripts = trimmed === "[project.scripts]";
+      if (!inProject && !inScripts) inProject = inScripts = false;
+      continue;
+    }
+    if (inProject && trimmed.startsWith("name")) {
+      const match = trimmed.match(/name\s*=\s*["']([^"']+)["']/);
+      if (match) name = match[1];
+    }
+    if (inScripts && trimmed.includes("=")) {
+      const keyMatch = trimmed.match(/^([a-zA-Z0-9_-]+)\s*=/);
+      if (keyMatch && !scriptName) scriptName = keyMatch[1];
+    }
+  }
+
+  if (!name) return null;
+  return {
+    name,
+    scriptName: scriptName || name.replace(/-/g, "_").replace(/\./g, "_"),
+  };
+}

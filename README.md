@@ -37,7 +37,7 @@ That's it. Boot detects your Docker services, apps, package manager, env require
 
 ## AI Agent Context
 
-Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`.
+Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`. If those files already exist, Boot uses their content and does not overwrite them (only creates missing targets). Use `--overwrite` to replace existing files.
 
 ```bash
 boot agent init      # generate from your stack + config

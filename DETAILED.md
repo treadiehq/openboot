@@ -160,6 +160,9 @@ agent:
 - **Monorepo apps** — scans `apps/*/package.json` for dev scripts
 - **Sub-directory apps** — detects `dashboard/`, `frontend/`, `backend/`, `server/`, etc.
 - **Single-app projects** — detects `dev` or `start` scripts in root `package.json`
+- **Python / uv** — detects `pyproject.toml` or `uv.lock` and adds `uv sync` to setup (or `pip install -e .` when only `requirements.txt` is present)
+- **Build-before-run** — if `dashboard/`, `frontend/`, `web/`, `client/`, or `admin/` has a `build` script, adds `cd <dir> && <pm> install && <pm> run build` to setup so the main app can assume the bundle is built
+- **Python main app** — when `pyproject.toml` has `[project.scripts]` (or uses project name), adds a primary app with `uv run <script>` and a known port when applicable (e.g. exo → 52415)
 - **Prisma** — detects `prisma/` directory and adds generate/push to setup
 - **Ports** — guesses 3000 for web/frontend, 3001 for api/server
 - **`.env` requirements** — parses `env.example` / `.env.example` for required and sensitive vars
@@ -262,26 +265,25 @@ Boot solves this: it already knows your stack, so it generates agent context aut
 
 ### `boot agent init`
 
-Generate agent context from your project stack and sync to all target files:
+Generate agent context from your project stack and sync to all target files. Boot **uses existing agent files** (e.g. `.cursorrules`, `AGENTS.md`) when present: their content is included in the generated output, and **existing target files are not overwritten** — only missing targets are created. Use `--overwrite` to replace existing files.
 
 ```bash
 boot agent init
 # ▶ Stack: Next.js, Hono, Prisma, tRPC, Zod, Vitest, TypeScript, Tailwind CSS, Turborepo
-# ✓ Wrote .cursorrules
-# ✓ Wrote AGENTS.md
-# ✓ Wrote CLAUDE.md
 # ✓ Wrote .github/copilot-instructions.md
+# Skipped existing (use --overwrite to replace): .cursorrules, AGENTS.md, CLAUDE.md
 ```
 
 Works with or without `boot.yaml`. With a config, you get richer output (apps, services, env requirements, conventions). Without one, Boot still auto-detects your stack from `package.json`.
 
 ### `boot agent sync`
 
-Regenerate and sync after editing `boot.yaml`:
+Regenerate and sync after editing `boot.yaml`. Same as init: existing target files are skipped unless you pass `--overwrite`.
 
 ```bash
-boot agent sync          # regenerate all targets
+boot agent sync          # regenerate; only write to missing targets
 boot agent sync --no-global  # exclude personal conventions
+boot agent sync --overwrite  # replace existing agent files
 ```
 
 ### `boot agent check`

@@ -60,6 +60,27 @@ export function detectAgentFiles(cwd: string): string[] {
 }
 
 /**
+ * Read content of existing agent files. Returns { path, content } for each file that exists and is readable.
+ */
+export function loadExistingAgentFiles(cwd: string): { path: string; content: string }[] {
+  const files = detectAgentFiles(cwd);
+  const result: { path: string; content: string }[] = [];
+  for (const relPath of files) {
+    const fullPath = path.join(cwd, relPath);
+    if (!fs.statSync(fullPath).isFile()) continue;
+    try {
+      const content = fs.readFileSync(fullPath, "utf-8").trim();
+      if (content.length > 0) {
+        result.push({ path: relPath, content });
+      }
+    } catch {
+      // Skip unreadable files
+    }
+  }
+  return result;
+}
+
+/**
  * Detect the technology stack from the project.
  * Scans root and sub-app package.json files, plus language-specific config files.
  */
@@ -279,6 +300,19 @@ export function generateAgentMarkdown(
   );
   lines.push("");
 
+  // ── Existing project rules (from .cursorrules, AGENTS.md, etc.) ──
+  const existingFiles = loadExistingAgentFiles(cwd);
+  if (existingFiles.length > 0) {
+    lines.push("## Existing project rules");
+    lines.push("");
+    for (const { path: relPath, content } of existingFiles) {
+      lines.push(`### From \`${relPath}\``);
+      lines.push("");
+      lines.push(content);
+      lines.push("");
+    }
+  }
+
   // ── Project name ──
   lines.push(`# ${config.name}`);
   lines.push("");
@@ -417,22 +451,36 @@ export function generateAgentMarkdown(
 // Sync & Check
 // ────────────────────────────────────────────────
 
+export interface SyncTargetsResult {
+  written: string[];
+  skipped: string[];
+}
+
 /**
  * Write the agent markdown to all configured target files.
- * Creates parent directories as needed. Returns the list of files written.
+ * Creates parent directories as needed.
+ * When overwrite is false (default), skips any target that already exists so existing project rules are preserved.
  */
 export function syncTargets(
   config: BootConfig,
   markdown: string,
-  cwd: string
-): string[] {
+  cwd: string,
+  options: { overwrite?: boolean } = {}
+): SyncTargetsResult {
+  const overwrite = options.overwrite === true;
   const targets = config.agent?.targets || DEFAULT_TARGETS;
   const written: string[] = [];
+  const skipped: string[] = [];
 
   for (const target of targets) {
     const fullPath = path.join(cwd, target);
-    const dir = path.dirname(fullPath);
 
+    if (fs.existsSync(fullPath) && !overwrite) {
+      skipped.push(target);
+      continue;
+    }
+
+    const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -441,7 +489,7 @@ export function syncTargets(
     written.push(target);
   }
 
-  return written;
+  return { written, skipped };
 }
 
 /**

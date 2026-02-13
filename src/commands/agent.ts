@@ -37,6 +37,7 @@ export function registerAgentCommands(program: Command): void {
     .description("Generate AI agent context from your project stack")
     .option("--from <path>", "Import conventions from another project")
     .option("--no-global", "Exclude personal/global conventions from output")
+    .option("--overwrite", "Overwrite existing agent files (default: skip existing)")
     .action(async (opts) => {
       try {
         const cwd = process.cwd();
@@ -83,15 +84,20 @@ export function registerAgentCommands(program: Command): void {
           log.success("Added agent section to boot.yaml");
         }
 
-        // Generate and sync
+        // Generate and sync (include existing agent file content; don't overwrite existing targets by default)
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
-        const written = syncTargets(config, markdown, cwd);
+        const { written, skipped } = syncTargets(config, markdown, cwd, {
+          overwrite: opts.overwrite,
+        });
 
         log.blank();
         for (const file of written) {
           log.success(`Wrote ${file}`);
+        }
+        if (skipped.length > 0) {
+          log.info(`Skipped existing (use --overwrite to replace): ${skipped.join(", ")}`);
         }
 
         log.blank();
@@ -114,6 +120,7 @@ export function registerAgentCommands(program: Command): void {
     .command("sync")
     .description("Regenerate and sync agent context to all target files")
     .option("--no-global", "Exclude personal/global conventions from output")
+    .option("--overwrite", "Overwrite existing agent files (default: skip existing)")
     .action(async (opts) => {
       try {
         const cwd = process.cwd();
@@ -122,10 +129,15 @@ export function registerAgentCommands(program: Command): void {
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
-        const written = syncTargets(config, markdown, cwd);
+        const { written, skipped } = syncTargets(config, markdown, cwd, {
+          overwrite: opts.overwrite,
+        });
 
         for (const file of written) {
           log.success(`Synced ${file}`);
+        }
+        if (skipped.length > 0) {
+          log.info(`Skipped existing (use --overwrite to replace): ${skipped.join(", ")}`);
         }
       } catch (err: any) {
         log.error(err.message);

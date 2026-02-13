@@ -2,7 +2,12 @@ import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
 import { log } from "../lib/log";
-import { findConfig, detectPackageManager } from "../lib/config";
+import {
+  findConfig,
+  detectPackageManager,
+  detectPythonTool,
+  getPyProjectInfo,
+} from "../lib/config";
 import {
   BootConfig,
   AppConfig,
@@ -74,7 +79,25 @@ export async function init(): Promise<void> {
   }
 
   // --- Detect setup steps ---
-  config.setup!.push(`${pm} install`);
+  const pythonTool = detectPythonTool(cwd);
+  const pyProject = getPyProjectInfo(cwd);
+  const hasRootPackageJson = fs.existsSync(path.join(cwd, "package.json"));
+  const hasNodeLockfile =
+    fs.existsSync(path.join(cwd, "pnpm-lock.yaml")) ||
+    fs.existsSync(path.join(cwd, "yarn.lock")) ||
+    fs.existsSync(path.join(cwd, "package-lock.json"));
+
+  if (pythonTool === "uv") {
+    config.setup!.push("uv sync");
+    log.success("Found uv / pyproject.toml");
+  } else if (pythonTool === "pip") {
+    config.setup!.push("pip install -e .");
+    log.success("Found requirements.txt");
+  }
+
+  if (hasRootPackageJson && (hasNodeLockfile || !pythonTool)) {
+    config.setup!.push(`${pm} install`);
+  }
 
   // Check for Prisma
   const prismaLocations = [
@@ -90,6 +113,25 @@ export async function init(): Promise<void> {
     log.success(`Found Prisma at ${prismaDir}`);
     config.setup!.push(`${pm} db:generate`);
     config.setup!.push(`${pm} db:push`);
+  }
+
+  // Build-before-run: subdirs that have a build script (e.g. dashboard, frontend)
+  const buildSubdirs = ["dashboard", "frontend", "web", "client", "admin"];
+  for (const dir of buildSubdirs) {
+    const fullPath = path.join(cwd, dir);
+    const pkgPath = path.join(fullPath, "package.json");
+    if (
+      fs.existsSync(fullPath) &&
+      fs.statSync(fullPath).isDirectory() &&
+      fs.existsSync(pkgPath)
+    ) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      if (pkg.scripts?.build) {
+        const subPm = detectPackageManager(fullPath) || "npm";
+        config.setup!.push(`cd ${dir} && ${subPm} install && ${subPm} run build`);
+        log.success(`Found build step: ${dir}`);
+      }
+    }
   }
 
   // Check for TypeORM migrations
@@ -211,6 +253,22 @@ export async function init(): Promise<void> {
       });
       log.success("Detected single-app project");
     }
+  }
+
+  // --- Detect Python main app (uv run <script>) ---
+  if (pyProject && pythonTool === "uv") {
+    const knownPorts: Record<string, number> = { exo: 52415 };
+    const port =
+      knownPorts[pyProject.scriptName] ?? knownPorts[pyProject.name];
+    const pythonApp: AppConfig = {
+      name: pyProject.name,
+      command: `uv run ${pyProject.scriptName}`,
+      ...(port && { port }),
+    };
+    config.apps!.unshift(pythonApp);
+    log.success(
+      `Found Python app: ${pyProject.name} (uv run ${pyProject.scriptName})`
+    );
   }
 
   // --- Detect existing AI agent files ---

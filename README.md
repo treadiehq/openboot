@@ -9,6 +9,7 @@ boot up       → start everything (Docker + apps)
 boot down     → stop everything
 boot reboot   → restart everything
 boot status   → show what's running
+boot logs     → view service logs (boot logs api -f)
 boot clean    → nuke deps, caches, build outputs for a fresh start
 ```
 
@@ -140,16 +141,18 @@ apps:
 
 ### `boot up`
 
-1. Validates `.env` file (required vars, rejects default secrets)
-2. Ensures package manager is available (auto-enables pnpm/yarn via corepack)
-3. Auto-installs root deps if `node_modules` is missing
-4. Auto-installs per-app deps in monorepo sub-apps
-5. Smart Prisma check — generates client only if `.prisma` is missing
-6. Starts Docker (compose services and/or standalone containers)
-7. Waits for each service's readiness check
-8. Starts each app in the background
-9. Polls health URLs until ready
-10. Prints summary with URLs
+1. Checks prerequisites (Node.js 18+, Docker if needed)
+2. Auto-creates `.env` from template (`env.example` / `.env.example`) if missing
+3. Validates `.env` file (required vars, rejects default secrets)
+4. Ensures package manager is available (auto-enables pnpm/yarn via corepack)
+5. Auto-installs root deps if `node_modules` is missing
+6. Auto-installs per-app deps in monorepo sub-apps
+7. Smart Prisma check — generates client only if `.prisma` is missing
+8. Starts Docker (compose services and/or standalone containers)
+9. Waits for each service's readiness check
+10. Starts each app in the background
+11. Polls health URLs until ready
+12. Prints summary with URLs
 
 ### `boot down`
 
@@ -166,7 +169,7 @@ Shows a table of all services with:
 - Port numbers
 - PIDs (with mismatch warnings if PID file ≠ port owner)
 - Process name (what binary is actually running, e.g. `node`, `nuxt`)
-- Live health checks (curl)
+- Live health checks (curl for apps, `pg_isready` / `redis-cli ping` for DBs)
 - Log file paths
 
 ### `boot clean`
@@ -178,6 +181,27 @@ Nukes everything for a fresh start:
 4. Removes build outputs (`dist/`, `build/`)
 5. Removes `.boot/` runtime data (PIDs, logs)
 6. Pass `--all` to also remove `pnpm-lock.yaml`
+
+### `boot logs`
+
+View logs for any service:
+```bash
+boot logs                    # show recent logs for all services
+boot logs api                # show logs for a specific service
+boot logs api -f             # follow mode (like tail -f)
+boot logs api -n 100         # last 100 lines
+boot logs postgres           # Docker container logs too
+```
+
+### `boot setup`
+
+One-time setup with smart Prisma handling:
+1. Checks prerequisites (Node.js, Docker)
+2. Auto-creates `.env` from template
+3. Starts Docker services (DB needs to be up for migrations)
+4. Runs configured setup commands
+5. Smart Prisma: generate client + migrations with fallback (`migrate deploy` → `db push`)
+6. Non-fatal seed failures (skips gracefully)
 
 ### `boot reboot`
 

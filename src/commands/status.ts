@@ -25,6 +25,23 @@ export async function status(): Promise<void> {
   // Docker services / containers
   if (config.docker) {
     const dockerStatuses = getDockerStatus(config);
+    // Collect readyCheck info for DB connection testing
+    const readyChecks = new Map<string, string>();
+    if (config.docker.services) {
+      for (const svc of config.docker.services) {
+        if (svc.readyCheck) {
+          readyChecks.set(svc.name, `${svc.container || svc.name}|${svc.readyCheck}`);
+        }
+      }
+    }
+    if (config.docker.containers) {
+      for (const ct of config.docker.containers) {
+        if (ct.readyCheck) {
+          readyChecks.set(ct.name, `${ct.name}|${ct.readyCheck}`);
+        }
+      }
+    }
+
     for (const svc of dockerStatuses) {
       const statusColor =
         svc.status === "running"
@@ -32,7 +49,22 @@ export async function status(): Promise<void> {
           : svc.status === "not found"
             ? `${RED}not found${RESET}`
             : `${YELLOW}${svc.status}${RESET}`;
-      rows.push([svc.name, statusColor, svc.ports || "—", "—", "docker", "—", "—"]);
+
+      // DB connection test for running containers with readyCheck
+      let healthStr = "—";
+      if (svc.status === "running") {
+        const checkInfo = readyChecks.get(svc.name);
+        if (checkInfo) {
+          const [container, check] = checkInfo.split("|");
+          healthStr = testContainerHealth(container, check)
+            ? `${GREEN}connected${RESET}`
+            : `${RED}failing${RESET}`;
+        } else {
+          healthStr = `${GREEN}ok${RESET}`;
+        }
+      }
+
+      rows.push([svc.name, statusColor, svc.ports || "—", "—", "docker", healthStr, "—"]);
     }
 
     if (dockerStatuses.length === 0 && config.docker.services) {
@@ -97,6 +129,18 @@ export async function status(): Promise<void> {
 
   log.table(rows);
   log.blank();
+}
+
+/**
+ * Test if a Docker container passes its health/ready check.
+ */
+function testContainerHealth(container: string, check: string): boolean {
+  try {
+    execSync(`docker exec ${container} ${check}`, { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

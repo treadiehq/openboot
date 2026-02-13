@@ -7,6 +7,7 @@ import { startApp } from "../lib/process";
 import { waitForHealth } from "../lib/health";
 import { log } from "../lib/log";
 import { BootConfig } from "../types";
+import { checkPrerequisites } from "../lib/prereqs";
 
 /**
  * `boot up` — start all services.
@@ -16,6 +17,16 @@ export async function up(): Promise<void> {
   const projectRoot = process.cwd();
 
   log.header(`Starting ${config.name}`);
+
+  // Check prerequisites
+  const needsDocker = !!(
+    config.docker?.composeFile ||
+    config.docker?.services?.length ||
+    config.docker?.containers?.length
+  );
+  if (!checkPrerequisites({ needsDocker })) {
+    process.exit(1);
+  }
 
   // Validate .env if configured
   if (config.env) {
@@ -123,19 +134,26 @@ function validateEnv(config: BootConfig): boolean {
   const envFile = envConfig.file || ".env";
   const envPath = path.resolve(envFile);
 
-  // Check if .env file exists
+  // Check if .env file exists — auto-create from template if possible
   if (!fs.existsSync(envPath)) {
-    log.error(`Missing ${envFile} file`);
-    log.step(`Copy the example and configure it:`);
-    // Try to find an example file
-    const examples = ["env.example", ".env.example", ".env.sample"];
-    const example = examples.find((e) => fs.existsSync(path.resolve(e)));
-    if (example) {
-      log.step(`  cp ${example} ${envFile}`);
+    const templates = [
+      "env.example",
+      ".env.example",
+      ".env.sample",
+      "env.template",
+    ];
+    const template = templates.find((t) => fs.existsSync(path.resolve(t)));
+
+    if (template) {
+      log.info(`No ${envFile} found — creating from ${template}...`);
+      fs.copyFileSync(path.resolve(template), envPath);
+      log.success(`Created ${envFile} from ${template}`);
+      log.warn("Review and update the values in .env before continuing");
     } else {
-      log.step(`  Create ${envFile} with the required variables`);
+      log.error(`Missing ${envFile} file`);
+      log.step(`Create ${envFile} with the required variables`);
+      return false;
     }
-    return false;
   }
 
   // Source the .env file into process.env for checks

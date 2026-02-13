@@ -8,6 +8,7 @@ import { down } from "./commands/down";
 import { reboot } from "./commands/reboot";
 import { status } from "./commands/status";
 import { clean } from "./commands/clean";
+import { logs } from "./commands/logs";
 
 const program = new Command();
 
@@ -82,6 +83,20 @@ program
   .action(async () => {
     try {
       await status();
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("logs [service]")
+  .description("View logs for services (boot logs api -f)")
+  .option("-f, --follow", "Follow log output (like tail -f)")
+  .option("-n, --lines <count>", "Number of lines to show (default: 40)")
+  .action(async (service, opts) => {
+    try {
+      await logs(service, opts);
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

@@ -60,8 +60,8 @@ export function detectPackageManager(
 }
 
 /**
- * Get the resolved package manager for a config.
+ * Get the resolved package manager for a config (or detect from lockfiles).
  */
-export function getPackageManager(config: BootConfig): string {
-  return config.packageManager || detectPackageManager();
+export function getPackageManager(config?: BootConfig): string {
+  return config?.packageManager || detectPackageManager();
 }

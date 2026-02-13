@@ -1,6 +1,12 @@
 # Openboot
 
-Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.
+Every project has the same problem: a README that says "run these 12 commands to get started," a `start.sh` that half works, Docker containers you forgot to start, and env vars you didn't set. New teammates spend hours just trying to run the thing.
+
+Then there's the AI problem: every tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`. `SKILL.md`, `SOUL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between projects and files.
+
+Boot fixes both. One config file, one command, everything starts, and your AI agent context stays in sync across every tool and every project.
+
+> Stop writing start scripts. Stop copy-pasting agent files. Just boot.
 
 ```
 boot init        → creates boot.yaml (auto-detects your stack)

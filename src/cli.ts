@@ -10,13 +10,14 @@ import { status } from "./commands/status";
 import { clean } from "./commands/clean";
 import { logs } from "./commands/logs";
 import { dev } from "./commands/dev";
+import { registerAgentCommands } from "./commands/agent";
 
 const program = new Command();
 
 program
   .name("boot")
   .description("Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.")
-  .version("0.1.0");
+  .version("0.1.1");
 
 program
   .command("init")
@@ -129,5 +130,7 @@ program
       process.exit(1);
     }
   });
+
+registerAgentCommands(program);
 
 program.parse();

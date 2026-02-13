@@ -16,6 +16,20 @@ export interface BootConfig {
 
   /** Application processes managed by boot */
   apps?: AppConfig[];
+
+  /** AI agent context configuration */
+  agent?: AgentConfig;
+}
+
+export interface AgentConfig {
+  /** Project description for AI context */
+  description?: string;
+
+  /** Coding conventions for this project */
+  conventions?: string[];
+
+  /** Target files to sync agent context to */
+  targets?: string[];
 }
 
 export interface EnvConfig {

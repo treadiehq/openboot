@@ -9,6 +9,7 @@ import {
   DockerService,
   ContainerConfig,
 } from "../types";
+import { detectAgentFiles, DEFAULT_TARGETS } from "../lib/agent";
 
 /**
  * `boot init` — auto-detect project structure and create boot.yaml.
@@ -212,6 +213,19 @@ export async function init(): Promise<void> {
     }
   }
 
+  // --- Detect existing AI agent files ---
+  const agentFiles = detectAgentFiles(cwd);
+  if (agentFiles.length > 0) {
+    for (const file of agentFiles) {
+      log.success(`Found agent file: ${file}`);
+    }
+  }
+
+  // Add default agent section so `boot agent sync` works out of the box
+  config.agent = {
+    targets: DEFAULT_TARGETS,
+  };
+
   // --- Write config ---
   const yamlStr = yaml.stringify(config, {
     indent: 2,
@@ -227,6 +241,7 @@ export async function init(): Promise<void> {
   log.step("  1. Review and edit boot.yaml");
   log.step("  2. Run: boot setup");
   log.step("  3. Run: boot up");
+  log.step("  4. Run: boot agent init  (generate AI agent context)");
   log.blank();
 }
 

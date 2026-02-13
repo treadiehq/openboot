@@ -1,6 +1,6 @@
 {
-  "name": "boot",
-  "version": "0.1.0",
+  "name": "openboot",
+  "version": "0.1.1",
   "description": "Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.",
   "author": "Treadie, Inc.",
   "license": "FSL-1.1-MIT",

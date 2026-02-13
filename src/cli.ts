@@ -9,6 +9,7 @@ import { reboot } from "./commands/reboot";
 import { status } from "./commands/status";
 import { clean } from "./commands/clean";
 import { logs } from "./commands/logs";
+import { dev } from "./commands/dev";
 
 const program = new Command();
 
@@ -44,9 +45,22 @@ program
 program
   .command("up")
   .description("Start all services (Docker + apps)")
+  .option("-a, --attach", "Attach to logs after starting (Ctrl+C detaches, services keep running)")
+  .action(async (opts) => {
+    try {
+      await up(opts);
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("dev")
+  .description("Start all services with live logs (Ctrl+C stops everything)")
   .action(async () => {
     try {
-      await up();
+      await dev();
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

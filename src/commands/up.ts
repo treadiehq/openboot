@@ -8,11 +8,12 @@ import { waitForHealth } from "../lib/health";
 import { log } from "../lib/log";
 import { BootConfig } from "../types";
 import { checkPrerequisites } from "../lib/prereqs";
+import { tailAllLogs } from "../lib/tail";
 
 /**
  * `boot up` — start all services.
  */
-export async function up(): Promise<void> {
+export async function up(options: { attach?: boolean } = {}): Promise<void> {
   const config = loadConfig();
   const projectRoot = process.cwd();
 
@@ -116,11 +117,30 @@ export async function up(): Promise<void> {
   }
 
   log.blank();
-  log.step("Logs:    .boot/logs/");
-  log.step("Stop:    boot down");
-  log.step("Restart: boot reboot");
-  log.step("Status:  boot status");
+  if (options.attach) {
+    log.step("Streaming logs... (Ctrl+C to detach, services keep running)");
+  } else {
+    log.step("Logs:    boot logs -f");
+    log.step("Stop:    boot down");
+    log.step("Restart: boot reboot");
+    log.step("Status:  boot status");
+  }
   log.blank();
+
+  // Attach mode: stream all logs in foreground
+  if (options.attach) {
+    const handle = tailAllLogs(config);
+    await new Promise<void>((resolve) => {
+      process.on("SIGINT", () => {
+        handle.stop();
+        log.blank();
+        log.success("Detached from logs. Services are still running.");
+        log.step("Stop with: boot down");
+        log.blank();
+        resolve();
+      });
+    });
+  }
 }
 
 /**

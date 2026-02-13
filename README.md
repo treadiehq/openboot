@@ -5,7 +5,9 @@ Dev stack lifecycle manager. One command to setup, start, stop, and reboot your 
 ```
 boot init     → creates boot.yaml (auto-detects your stack)
 boot setup    → one-time setup (deps, DB, migrations)
-boot up       → start everything (Docker + apps)
+boot up       → start everything (Docker + apps) in the background
+boot up -a    → start everything + stream logs (Ctrl+C detaches)
+boot dev      → interactive dev mode with live logs (Ctrl+C stops all)
 boot down     → stop everything
 boot reboot   → restart everything
 boot status   → show what's running
@@ -32,6 +34,7 @@ npx boot init
 boot init       # creates boot.yaml by auto-detecting your stack
 boot setup      # one-time: install deps, start DB, run migrations
 boot up         # start Docker + all app processes
+boot dev        # or: start + stream live logs (Ctrl+C stops all)
 ```
 
 That's it. `boot init` detects your Docker setup, apps, package manager, env requirements, and generates the config.
@@ -154,6 +157,21 @@ apps:
 11. Polls health URLs until ready
 12. Prints summary with URLs
 
+#### `boot up --attach` / `boot up -a`
+
+Same as `boot up` but after starting, streams all app logs to your terminal (color-coded by service). Press Ctrl+C to detach — services keep running in the background.
+
+### `boot dev`
+
+Interactive development mode — the closest replacement for your old `start.sh` scripts:
+
+1. Starts Docker services
+2. Starts all apps
+3. Streams live, color-coded logs for every service
+4. **Ctrl+C gracefully stops everything** (apps + Docker)
+
+This is the "one terminal" experience. No separate tabs needed.
+
 ### `boot down`
 
 1. Stops all tracked app processes (SIGTERM → SIGKILL)
@@ -206,6 +224,22 @@ One-time setup with smart Prisma handling:
 ### `boot reboot`
 
 Runs `down` then `up`.
+
+## Development Workflow
+
+```bash
+# Option 1: Background (CI-friendly, scriptable)
+boot up               # starts everything, exits immediately
+boot logs api -f      # follow one service's logs in another terminal
+boot down             # stop when done
+
+# Option 2: Attach (start background + watch logs)
+boot up --attach      # starts everything, streams logs; Ctrl+C detaches (services stay up)
+boot down             # stop when done
+
+# Option 3: Interactive (replaces start.sh)
+boot dev              # starts everything + live logs; Ctrl+C stops everything
+```
 
 ## Docker Support
 

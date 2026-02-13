@@ -11,13 +11,14 @@ import { clean } from "./commands/clean";
 import { logs } from "./commands/logs";
 import { dev } from "./commands/dev";
 import { registerAgentCommands } from "./commands/agent";
+import { version, update, getCurrentVersion } from "./commands/update";
 
 const program = new Command();
 
 program
   .name("boot")
   .description("Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.")
-  .version("0.1.1");
+  .version(getCurrentVersion(), "-V, --version", "Output the version number");
 
 program
   .command("init")
@@ -125,6 +126,30 @@ program
   .action(async (opts) => {
     try {
       await clean(opts);
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("version")
+  .description("Show current version and check for updates")
+  .action(async () => {
+    try {
+      await version();
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("update")
+  .description("Update openboot to the latest version")
+  .action(async () => {
+    try {
+      await update();
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

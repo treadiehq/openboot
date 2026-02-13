@@ -1,4 +1,4 @@
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { AppConfig } from "../types";
@@ -60,6 +60,21 @@ export function getAppPid(appName: string): number | null {
 }
 
 /**
+ * Get the PID actually using a given port (for mismatch detection).
+ */
+export function getPortPid(port: number): number | null {
+  try {
+    const result = execSync(`lsof -ti:${port}`, { stdio: "pipe" })
+      .toString()
+      .trim();
+    const pid = parseInt(result.split("\n")[0], 10);
+    return isNaN(pid) ? null : pid;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Start an app process in the background.
  */
 export function startApp(app: AppConfig, projectRoot: string): void {
@@ -80,7 +95,6 @@ export function startApp(app: AppConfig, projectRoot: string): void {
   if (app.port && isPortInUse(app.port)) {
     log.warn(`Port ${app.port} in use, freeing...`);
     killPort(app.port);
-    // Brief pause to let the port release
     const end = Date.now() + 1000;
     while (Date.now() < end) {
       /* wait */
@@ -111,63 +125,122 @@ export function startApp(app: AppConfig, projectRoot: string): void {
 }
 
 /**
- * Stop an app by killing its process tree.
+ * Stop an app by killing its process tree, with pkill fallback.
  */
-export function stopApp(appName: string): void {
+export function stopApp(app: AppConfig | string): void {
+  const appName = typeof app === "string" ? app : app.name;
+  const appCommand = typeof app === "string" ? null : app.command;
+  const appPort = typeof app === "string" ? null : app.port;
+
   const pf = pidFile(appName);
-  if (!fs.existsSync(pf)) {
-    log.step(`${appName} is not running`);
-    return;
-  }
+  let stopped = false;
 
-  const pid = parseInt(fs.readFileSync(pf, "utf-8").trim(), 10);
+  // 1. Try PID file
+  if (fs.existsSync(pf)) {
+    const pid = parseInt(fs.readFileSync(pf, "utf-8").trim(), 10);
 
-  // Kill the process group (negative PID)
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      // already dead
-    }
-  }
-
-  // Wait up to 5s for the process to die, then SIGKILL
-  const deadline = Date.now() + 5000;
-  while (Date.now() < deadline && isProcessRunning(pid)) {
-    const end = Date.now() + 200;
-    while (Date.now() < end) {
-      /* wait */
-    }
-  }
-
-  if (isProcessRunning(pid)) {
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {
+    if (!isNaN(pid) && isProcessRunning(pid)) {
+      // Kill the process group (negative PID)
       try {
-        process.kill(pid, "SIGKILL");
+        process.kill(-pid, "SIGTERM");
       } catch {
-        // ignore
+        try {
+          process.kill(pid, "SIGTERM");
+        } catch {
+          // already dead
+        }
+      }
+
+      // Wait up to 3s for graceful shutdown
+      const deadline = Date.now() + 3000;
+      while (Date.now() < deadline && isProcessRunning(pid)) {
+        const end = Date.now() + 200;
+        while (Date.now() < end) {
+          /* wait */
+        }
+      }
+
+      // SIGKILL if still alive
+      if (isProcessRunning(pid)) {
+        try {
+          process.kill(-pid, "SIGKILL");
+        } catch {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // ignore
+          }
+        }
+      }
+
+      stopped = true;
+    }
+
+    // Clean up PID file
+    try {
+      fs.unlinkSync(pf);
+    } catch {
+      // ignore
+    }
+  }
+
+  // 2. Fallback: pkill by command pattern (like airatelimit's pkill -f "nest start")
+  if (!stopped && appCommand) {
+    // Extract the main command for pkill (e.g. "nest start" from "npm run dev")
+    const patterns = extractPkillPatterns(appCommand);
+    for (const pattern of patterns) {
+      try {
+        execSync(`pkill -f "${pattern}" 2>/dev/null`, { stdio: "pipe" });
+        stopped = true;
+      } catch {
+        // no matching process
       }
     }
   }
 
-  // Clean up PID file
-  try {
-    fs.unlinkSync(pf);
-  } catch {
-    // ignore
+  // 3. Last resort: force kill by port
+  if (appPort && isPortInUse(appPort)) {
+    log.step(`Force-killing process on port ${appPort}...`);
+    killPort(appPort);
+    stopped = true;
   }
 
-  log.success(`${appName} stopped`);
+  if (stopped) {
+    log.success(`${appName} stopped`);
+  } else {
+    log.step(`${appName} is not running`);
+  }
 }
 
 /**
- * Stop all apps whose PID files exist.
+ * Extract process name patterns for pkill from a command string.
  */
-export function stopAllApps(): void {
+function extractPkillPatterns(command: string): string[] {
+  const patterns: string[] = [];
+
+  // "npm run dev" / "pnpm dev" → look for common dev server patterns
+  if (command.includes("nest")) patterns.push("nest start");
+  if (command.includes("nuxt")) patterns.push("nuxt dev");
+  if (command.includes("next")) patterns.push("next dev");
+  if (command.includes("vite")) patterns.push("vite");
+  if (command.includes("tsx")) patterns.push("tsx watch");
+
+  return patterns;
+}
+
+/**
+ * Stop all apps. Accepts optional app configs for smarter stopping.
+ */
+export function stopAllApps(apps?: AppConfig[]): void {
+  // If we have app configs, use them (enables pkill + port fallback)
+  if (apps) {
+    for (const app of apps) {
+      stopApp(app);
+    }
+    return;
+  }
+
+  // Fallback: just use PID files
   if (!fs.existsSync(PIDS_DIR)) return;
 
   const files = fs.readdirSync(PIDS_DIR).filter((f) => f.endsWith(".pid"));
@@ -182,7 +255,8 @@ export function stopAllApps(): void {
  */
 export function getAppStatus(
   app: AppConfig
-): { running: boolean; pid: number | null } {
+): { running: boolean; pid: number | null; portPid: number | null } {
   const pid = getAppPid(app.name);
-  return { running: pid !== null, pid };
+  const portPid = app.port ? getPortPid(app.port) : null;
+  return { running: pid !== null, pid, portPid };
 }

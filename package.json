@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.",
   "author": "Treadie, Inc.",
-  "license": "MIT",
+  "license": "FSL-1.1-MIT",
   "bin": {
     "boot": "./dist/cli.js"
   },

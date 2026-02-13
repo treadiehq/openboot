@@ -3,7 +3,12 @@ import * as path from "path";
 import * as yaml from "yaml";
 import { log } from "../lib/log";
 import { findConfig, detectPackageManager } from "../lib/config";
-import { BootConfig, AppConfig, DockerService } from "../types";
+import {
+  BootConfig,
+  AppConfig,
+  DockerService,
+  ContainerConfig,
+} from "../types";
 
 /**
  * `boot init` — auto-detect project structure and create boot.yaml.
@@ -46,6 +51,25 @@ export async function init(): Promise<void> {
       composeFile,
       services: detectDockerServices(cwd, composeFile),
     };
+  }
+
+  // --- Detect raw Docker containers (no compose file) ---
+  if (!composeFile) {
+    const containers = detectRawContainers(cwd);
+    if (containers.length > 0) {
+      if (!config.docker) config.docker = {};
+      config.docker.containers = containers;
+      for (const ct of containers) {
+        log.success(`Found Docker container: ${ct.name} (${ct.image})`);
+      }
+    }
+  }
+
+  // --- Detect .env requirements ---
+  const envConfig = detectEnvRequirements(cwd);
+  if (envConfig) {
+    config.env = envConfig;
+    log.success(`Found ${envConfig.file || ".env"} with ${envConfig.required?.length || 0} required vars`);
   }
 
   // --- Detect setup steps ---
@@ -279,4 +303,237 @@ function guessPort(name: string): number | undefined {
   if (["admin"].includes(lower)) return 3002;
   if (["docs"].includes(lower)) return 3003;
   return undefined;
+}
+
+/**
+ * Detect raw Docker containers from scripts/ or Dockerfile.
+ * Scans shell scripts for `docker start <name>` and `docker run --name <name>` patterns.
+ */
+function detectRawContainers(cwd: string): ContainerConfig[] {
+  const containers: ContainerConfig[] = [];
+  const seen = new Set<string>();
+
+  const scriptsDir = path.join(cwd, "scripts");
+  if (!fs.existsSync(scriptsDir)) return containers;
+
+  // Collect all script contents
+  const scripts = fs.readdirSync(scriptsDir).filter((f) => f.endsWith(".sh"));
+  const allContent = scripts
+    .map((f) => fs.readFileSync(path.join(scriptsDir, f), "utf-8"))
+    .join("\n");
+
+  // 1. Find container names from `docker start <name>` or `docker ps | grep <name>`
+  const namePatterns = [
+    /docker\s+start\s+([\w-]+)/g,
+    /docker\s+ps\s*\|[^]*?grep\s+-?q?\s*([\w-]+)/g,
+  ];
+
+  for (const pattern of namePatterns) {
+    for (const m of allContent.matchAll(pattern)) {
+      const name = m[1];
+      if (seen.has(name) || name.startsWith("$") || name.startsWith("-"))
+        continue;
+      seen.add(name);
+
+      // Search all content for image, port, and env associated with this container
+      const ct: ContainerConfig = {
+        name,
+        image: findImageForContainer(allContent, name),
+      };
+
+      const port = findPortForContainer(allContent, name);
+      if (port) ct.ports = [port];
+
+      const env = findEnvForContainer(allContent, name);
+      if (Object.keys(env).length > 0) ct.env = env;
+
+      // Detect readyCheck based on image
+      if (ct.image.includes("postgres")) {
+        ct.readyCheck = "pg_isready -U postgres";
+        ct.timeout = 30;
+      } else if (ct.image.includes("mysql") || ct.image.includes("mariadb")) {
+        ct.readyCheck = "mysqladmin ping -h localhost";
+        ct.timeout = 30;
+      } else if (ct.image.includes("redis")) {
+        ct.readyCheck = "redis-cli ping";
+        ct.timeout = 10;
+      }
+
+      containers.push(ct);
+    }
+  }
+
+  return containers;
+}
+
+/**
+ * Find the Docker image for a container name from script content.
+ */
+function findImageForContainer(content: string, name: string): string {
+  // Look for "docker run ... --name <name> ... <image>"
+  // Image is typically the last non-flag argument, like postgres:15
+  const imagePatterns = [
+    // "docker run ... --name ai-proxy-db ... postgres:15"
+    new RegExp(
+      `docker\\s+run\\s+[^\\n]*--name\\s+${escapeRegex(name)}[^\\n]*((?:postgres|mysql|mariadb|redis|mongo|alpine|ubuntu|node|nginx)[\\w/.:-]*)`,
+      "i"
+    ),
+    // Also search for the image near the container name in any context
+    new RegExp(
+      `${escapeRegex(name)}[^\\n]*((?:postgres|mysql|mariadb|redis|mongo):[\\w.-]+)`,
+      "i"
+    ),
+  ];
+
+  for (const pattern of imagePatterns) {
+    const m = content.match(pattern);
+    if (m && m[1]) return m[1];
+  }
+
+  // Fallback: if the container name hints at the DB type
+  if (name.includes("postgres") || name.includes("pg")) return "postgres:15";
+  if (name.includes("mysql")) return "mysql:8";
+  if (name.includes("redis")) return "redis:7";
+  if (name.includes("mongo")) return "mongo:7";
+
+  return "postgres:15";
+}
+
+/**
+ * Find port mapping for a container from script content.
+ */
+function findPortForContainer(
+  content: string,
+  name: string
+): string | null {
+  // Look for "-p <port>:<port>" near the container name
+  const pattern = new RegExp(
+    `(?:${escapeRegex(name)}[^]*?|[^]*?${escapeRegex(name)}[^]*?)-p\\s+(\\d+:\\d+)`,
+    "i"
+  );
+  const m = content.match(pattern);
+  if (m) return m[1];
+
+  // Simpler: just find any -p near the name on nearby lines
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(name)) {
+      // Search nearby lines (within 5 lines)
+      for (let j = Math.max(0, i - 5); j < Math.min(lines.length, i + 5); j++) {
+        const portMatch = lines[j].match(/-p\s+(\d+:\d+)/);
+        if (portMatch) return portMatch[1];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Find environment variables for a container from script content.
+ */
+function findEnvForContainer(
+  content: string,
+  name: string
+): Record<string, string> {
+  const env: Record<string, string> = {};
+
+  // Find lines near the container name with -e KEY=VALUE
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes(name)) {
+      for (
+        let j = Math.max(0, i - 5);
+        j < Math.min(lines.length, i + 10);
+        j++
+      ) {
+        const envMatches = lines[j].matchAll(/-e\s+(\w+)=(\S+)/g);
+        for (const em of envMatches) {
+          const val = em[2].replace(/[\\'"]/g, "");
+          // Skip shell variable references
+          if (!val.startsWith("$")) {
+            env[em[1]] = val;
+          }
+        }
+      }
+    }
+  }
+
+  return env;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Detect .env requirements from env.example / .env.example files.
+ */
+function detectEnvRequirements(
+  cwd: string
+): BootConfig["env"] | null {
+  const envExamples = ["env.example", ".env.example", ".env.sample"];
+  const exampleFile = envExamples.find((f) =>
+    fs.existsSync(path.join(cwd, f))
+  );
+
+  // Also check if .env itself exists
+  const hasEnv = fs.existsSync(path.join(cwd, ".env"));
+
+  if (!exampleFile && !hasEnv) return null;
+
+  const result: BootConfig["env"] = { file: ".env" };
+
+  // Parse example file for required vars
+  if (exampleFile) {
+    const content = fs.readFileSync(path.join(cwd, exampleFile), "utf-8");
+    const required: string[] = [];
+    const reject: Record<string, string[]> = {};
+
+    for (const line of content.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+
+      const eq = trimmed.indexOf("=");
+      if (eq === -1) continue;
+
+      const key = trimmed.substring(0, eq).trim();
+      const val = trimmed.substring(eq + 1).trim();
+
+      // Common security-sensitive vars that should be required
+      const sensitivePatterns = [
+        "SECRET",
+        "KEY",
+        "PASSWORD",
+        "TOKEN",
+        "DATABASE_URL",
+      ];
+      if (sensitivePatterns.some((p) => key.toUpperCase().includes(p))) {
+        required.push(key);
+
+        // If the example value looks like a placeholder, add it to reject list
+        if (
+          val.includes("change") ||
+          val.includes("your-") ||
+          val.includes("xxx") ||
+          val.includes("replace")
+        ) {
+          // Strip quotes
+          let cleanVal = val;
+          if (
+            (cleanVal.startsWith('"') && cleanVal.endsWith('"')) ||
+            (cleanVal.startsWith("'") && cleanVal.endsWith("'"))
+          ) {
+            cleanVal = cleanVal.slice(1, -1);
+          }
+          reject[key] = [cleanVal];
+        }
+      }
+    }
+
+    if (required.length > 0) result.required = required;
+    if (Object.keys(reject).length > 0) result.reject = reject;
+  }
+
+  return result;
 }

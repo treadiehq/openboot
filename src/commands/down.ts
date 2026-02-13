@@ -19,8 +19,8 @@ export async function down(): Promise<void> {
 
   log.header(`Stopping ${config.name}`);
 
-  // Stop app processes first
-  stopAllApps();
+  // Stop app processes first (pass configs for pkill fallback + port cleanup)
+  stopAllApps(config.apps);
 
   // Stop Docker services
   if (config.docker) {

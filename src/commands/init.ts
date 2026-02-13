@@ -238,6 +238,7 @@ function detectDockerServices(
   composeFile: string
 ): DockerService[] {
   const services: DockerService[] = [];
+  const projectName = path.basename(cwd).toLowerCase().replace(/[^a-z0-9-]/g, "");
 
   try {
     const raw = fs.readFileSync(path.join(cwd, composeFile), "utf-8");
@@ -247,20 +248,27 @@ function detectDockerServices(
       for (const [name, svc] of Object.entries<any>(compose.services)) {
         const image: string = svc?.image || "";
 
+        // Docker Compose auto-generates container names as {project}-{service}-1
+        // if no container_name is set
+        const containerName =
+          svc?.container_name || `${projectName}-${name}-1`;
+
+        // Extract env vars (object or array form)
+        const envObj = getServiceEnvObject(svc);
+
         // Detect Postgres
         if (image.includes("postgres")) {
-          const containerName = svc?.container_name || name;
+          const pgUser = envObj.POSTGRES_USER || "postgres";
           services.push({
             name,
             container: containerName,
-            readyCheck: "pg_isready -U postgres",
+            readyCheck: `pg_isready -U ${pgUser}`,
             timeout: 30,
           });
         }
 
         // Detect MySQL
         if (image.includes("mysql") || image.includes("mariadb")) {
-          const containerName = svc?.container_name || name;
           services.push({
             name,
             container: containerName,
@@ -271,7 +279,6 @@ function detectDockerServices(
 
         // Detect Redis
         if (image.includes("redis")) {
-          const containerName = svc?.container_name || name;
           services.push({
             name,
             container: containerName,
@@ -286,6 +293,31 @@ function detectDockerServices(
   }
 
   return services;
+}
+
+/**
+ * Extract environment variables from a compose service definition as a key-value object.
+ * Handles both array form ["KEY=val"] and object form { KEY: "val" }.
+ */
+function getServiceEnvObject(svc: any): Record<string, string> {
+  const env: Record<string, string> = {};
+  if (!svc?.environment) return env;
+
+  if (Array.isArray(svc.environment)) {
+    for (const item of svc.environment) {
+      const str = String(item);
+      const eq = str.indexOf("=");
+      if (eq > 0) {
+        env[str.substring(0, eq)] = str.substring(eq + 1);
+      }
+    }
+  } else if (typeof svc.environment === "object") {
+    for (const [k, v] of Object.entries(svc.environment)) {
+      env[k] = String(v);
+    }
+  }
+
+  return env;
 }
 
 /**

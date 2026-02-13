@@ -181,11 +181,17 @@ export async function init(): Promise<void> {
       pkg.main;
 
     if ((hasDevScript || hasStartScript) && isRealApp) {
-      // Pick port: if sub-apps already claimed 3000, use 3001 for root (or vice versa)
-      let rootPort = config.apps!.length === 0 ? 3000 : 3001;
-      // If 3001 is taken by a sub-app, bump further
-      while (config.apps!.some((a) => a.port === rootPort)) {
-        rootPort++;
+      // Read PORT from .env if available — that's what the app actually uses
+      let rootPort = readPortFromEnv(cwd) || 3000;
+
+      // If a sub-app already claimed this port, bump the sub-app instead
+      const conflictApp = config.apps!.find((a) => a.port === rootPort);
+      if (conflictApp) {
+        let altPort = rootPort + 1;
+        while (config.apps!.some((a) => a.port === altPort)) {
+          altPort++;
+        }
+        conflictApp.port = altPort;
       }
 
       config.apps!.unshift({
@@ -196,10 +202,11 @@ export async function init(): Promise<void> {
       log.success(`Found root app: ${projectName}`);
     } else if (config.apps!.length === 0 && (hasDevScript || hasStartScript)) {
       // Fallback: no sub-apps and no src/, but has scripts — still treat as single app
+      const rootPort = readPortFromEnv(cwd) || 3000;
       config.apps!.push({
         name: projectName,
         command: devCommand(pm, hasDevScript),
-        port: 3000,
+        port: rootPort,
       });
       log.success("Detected single-app project");
     }
@@ -480,6 +487,23 @@ function findEnvForContainer(
 
 function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Read the PORT value from the project's .env file.
+ */
+function readPortFromEnv(cwd: string): number | null {
+  const envPath = path.join(cwd, ".env");
+  if (!fs.existsSync(envPath)) return null;
+
+  const content = fs.readFileSync(envPath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^PORT\s*=\s*(\d+)/);
+    if (match) return parseInt(match[1], 10);
+  }
+  return null;
 }
 
 /**

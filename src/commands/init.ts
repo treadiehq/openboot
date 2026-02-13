@@ -72,7 +72,7 @@ export async function init(): Promise<void> {
     log.success("Found migrations/");
   }
 
-  // --- Detect apps (monorepo) ---
+  // --- Detect apps (monorepo under apps/) ---
   const appsDir = path.join(cwd, "apps");
   if (fs.existsSync(appsDir) && fs.statSync(appsDir).isDirectory()) {
     const dirs = fs.readdirSync(appsDir).filter((d) => {
@@ -91,7 +91,7 @@ export async function init(): Promise<void> {
       const app: AppConfig = {
         name: dir,
         path: `apps/${dir}`,
-        command: hasDevScript ? `${pm} dev` : `${pm} start`,
+        command: devCommand(pm, hasDevScript),
       };
 
       const port = guessPort(dir);
@@ -102,17 +102,79 @@ export async function init(): Promise<void> {
     }
   }
 
-  // --- Detect single-app project (no apps/ dir) ---
-  if (config.apps!.length === 0 && fs.existsSync(path.join(cwd, "package.json"))) {
+  // --- Detect apps in common sub-directories (dashboard/, frontend/, server/, etc.) ---
+  const subDirs = [
+    "dashboard",
+    "frontend",
+    "backend",
+    "server",
+    "client",
+    "admin",
+    "docs",
+  ];
+  for (const dir of subDirs) {
+    const fullPath = path.join(cwd, dir);
+    const pkgPath = path.join(fullPath, "package.json");
+    // Skip if already detected under apps/
+    const alreadyFound = config.apps!.some((a) => a.name === dir);
+    if (
+      !alreadyFound &&
+      fs.existsSync(pkgPath) &&
+      fs.statSync(fullPath).isDirectory()
+    ) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+      const hasDevScript = !!pkg.scripts?.dev;
+
+      if (hasDevScript || pkg.scripts?.start) {
+        const app: AppConfig = {
+          name: dir,
+          path: dir,
+          command: devCommand(pm, hasDevScript),
+        };
+
+        const port = guessPort(dir);
+        if (port) app.port = port;
+
+        config.apps!.push(app);
+        log.success(`Found app: ${dir}`);
+      }
+    }
+  }
+
+  // --- Detect root app (if root package.json has dev/start and it's not a monorepo launcher) ---
+  if (fs.existsSync(path.join(cwd, "package.json"))) {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(cwd, "package.json"), "utf-8")
     );
     const hasDevScript = !!pkg.scripts?.dev;
+    const hasStartScript = !!pkg.scripts?.start;
 
-    if (hasDevScript || pkg.scripts?.start) {
+    // Check if this is a real app (has its own src/ or main entry) vs just a monorepo root
+    const isRealApp =
+      fs.existsSync(path.join(cwd, "src")) ||
+      fs.existsSync(path.join(cwd, "index.ts")) ||
+      fs.existsSync(path.join(cwd, "index.js")) ||
+      pkg.main;
+
+    if ((hasDevScript || hasStartScript) && isRealApp) {
+      // Pick port: if sub-apps already claimed 3000, use 3001 for root (or vice versa)
+      let rootPort = config.apps!.length === 0 ? 3000 : 3001;
+      // If 3001 is taken by a sub-app, bump further
+      while (config.apps!.some((a) => a.port === rootPort)) {
+        rootPort++;
+      }
+
+      config.apps!.unshift({
+        name: projectName,
+        command: devCommand(pm, hasDevScript),
+        port: rootPort,
+      });
+      log.success(`Found root app: ${projectName}`);
+    } else if (config.apps!.length === 0 && (hasDevScript || hasStartScript)) {
+      // Fallback: no sub-apps and no src/, but has scripts — still treat as single app
       config.apps!.push({
         name: projectName,
-        command: hasDevScript ? `${pm} dev` : `${pm} start`,
+        command: devCommand(pm, hasDevScript),
         port: 3000,
       });
       log.success("Detected single-app project");
@@ -193,6 +255,17 @@ function detectDockerServices(
   }
 
   return services;
+}
+
+/**
+ * Build the dev/start command for a given package manager.
+ * npm requires "run" for custom scripts (npm run dev), pnpm/yarn don't.
+ */
+function devCommand(pm: string, hasDev: boolean): string {
+  if (pm === "npm") {
+    return hasDev ? "npm run dev" : "npm start";
+  }
+  return hasDev ? `${pm} dev` : `${pm} start`;
 }
 
 /**

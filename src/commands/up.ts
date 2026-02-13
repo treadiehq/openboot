@@ -24,9 +24,13 @@ export async function up(): Promise<void> {
     }
   }
 
-  // Auto-install deps if node_modules is missing
+  const pm = getPackageManager(config);
+
+  // Ensure package manager is available (corepack auto-setup)
+  ensurePackageManager(pm);
+
+  // Auto-install root deps if node_modules is missing
   if (!fs.existsSync("node_modules") && fs.existsSync("package.json")) {
-    const pm = getPackageManager(config);
     log.info("Dependencies not installed — running install...");
     try {
       execSync(`${pm} install`, { stdio: "inherit" });
@@ -36,6 +40,32 @@ export async function up(): Promise<void> {
       process.exit(1);
     }
   }
+
+  // Auto-install per-app deps if missing (monorepo sub-apps)
+  if (config.apps) {
+    for (const app of config.apps) {
+      if (app.path) {
+        const appDir = path.resolve(projectRoot, app.path);
+        const appNodeModules = path.join(appDir, "node_modules");
+        const appPkgJson = path.join(appDir, "package.json");
+        if (
+          fs.existsSync(appPkgJson) &&
+          !fs.existsSync(appNodeModules)
+        ) {
+          log.info(`Installing dependencies for ${app.name}...`);
+          try {
+            execSync(`${pm} install`, { cwd: appDir, stdio: "inherit" });
+            log.success(`${app.name} dependencies installed`);
+          } catch {
+            log.warn(`Failed to install deps for ${app.name} — continuing`);
+          }
+        }
+      }
+    }
+  }
+
+  // Smart Prisma check — generate client if .prisma is missing
+  smartPrismaCheck(config, pm, projectRoot);
 
   // Start Docker services
   if (config.docker) {
@@ -161,4 +191,93 @@ function validateEnv(config: BootConfig): boolean {
   }
 
   return valid;
+}
+
+/**
+ * Ensure the detected package manager is actually available.
+ * If pnpm is needed but not installed, try corepack or global install.
+ */
+function ensurePackageManager(pm: string): void {
+  try {
+    execSync(`${pm} --version`, { stdio: "pipe" });
+    return; // Already available
+  } catch {
+    // Not found
+  }
+
+  if (pm === "pnpm") {
+    log.info("pnpm not found — enabling via corepack...");
+    try {
+      execSync("corepack enable pnpm", { stdio: "pipe" });
+      log.success("pnpm enabled via corepack");
+      return;
+    } catch {
+      // corepack failed
+    }
+
+    log.info("Trying global install...");
+    try {
+      execSync("npm install -g pnpm", { stdio: "inherit" });
+      log.success("pnpm installed globally");
+      return;
+    } catch {
+      log.error("Failed to install pnpm. Please install it manually.");
+      process.exit(1);
+    }
+  }
+
+  if (pm === "yarn") {
+    log.info("yarn not found — enabling via corepack...");
+    try {
+      execSync("corepack enable yarn", { stdio: "pipe" });
+      log.success("yarn enabled via corepack");
+      return;
+    } catch {
+      log.error("Failed to enable yarn. Please install it manually.");
+      process.exit(1);
+    }
+  }
+
+  log.error(`${pm} is not installed. Please install it first.`);
+  process.exit(1);
+}
+
+/**
+ * Check if Prisma client needs to be generated.
+ * Scans known locations for prisma/ directories and checks if .prisma exists.
+ */
+function smartPrismaCheck(
+  config: BootConfig,
+  pm: string,
+  projectRoot: string
+): void {
+  const prismaLocations = [
+    "prisma",
+    "apps/api/prisma",
+    "apps/server/prisma",
+    "apps/backend/prisma",
+  ];
+
+  for (const loc of prismaLocations) {
+    const prismaDir = path.resolve(projectRoot, loc);
+    if (!fs.existsSync(prismaDir)) continue;
+
+    // Determine the app directory (parent of prisma/)
+    const appDir = path.dirname(prismaDir);
+    const prismaClient = path.join(appDir, "node_modules", ".prisma");
+
+    if (!fs.existsSync(prismaClient)) {
+      log.info(`Generating Prisma client (${loc})...`);
+      const runCmd = pm === "npm" ? "npx" : pm;
+      try {
+        execSync(`${runCmd} prisma generate`, {
+          cwd: appDir,
+          stdio: "inherit",
+        });
+        log.success("Prisma client generated");
+      } catch {
+        log.warn("Failed to generate Prisma client — continuing");
+      }
+    }
+  }
 }

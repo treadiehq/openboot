@@ -7,6 +7,7 @@ import { up } from "./commands/up";
 import { down } from "./commands/down";
 import { reboot } from "./commands/reboot";
 import { status } from "./commands/status";
+import { clean } from "./commands/clean";
 
 const program = new Command();
 
@@ -81,6 +82,19 @@ program
   .action(async () => {
     try {
       await status();
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("clean")
+  .description("Remove node_modules, caches, and build outputs for a fresh start")
+  .option("--all", "Also remove pnpm-lock.yaml")
+  .action(async (opts) => {
+    try {
+      await clean(opts);
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

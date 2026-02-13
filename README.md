@@ -9,6 +9,7 @@ boot up       → start everything (Docker + apps)
 boot down     → stop everything
 boot reboot   → restart everything
 boot status   → show what's running
+boot clean    → nuke deps, caches, build outputs for a fresh start
 ```
 
 ## Install
@@ -140,12 +141,15 @@ apps:
 ### `boot up`
 
 1. Validates `.env` file (required vars, rejects default secrets)
-2. Auto-installs deps if `node_modules` is missing
-3. Starts Docker (compose services and/or standalone containers)
-4. Waits for each service's readiness check
-5. Starts each app in the background
-6. Polls health URLs until ready
-7. Prints summary with URLs
+2. Ensures package manager is available (auto-enables pnpm/yarn via corepack)
+3. Auto-installs root deps if `node_modules` is missing
+4. Auto-installs per-app deps in monorepo sub-apps
+5. Smart Prisma check — generates client only if `.prisma` is missing
+6. Starts Docker (compose services and/or standalone containers)
+7. Waits for each service's readiness check
+8. Starts each app in the background
+9. Polls health URLs until ready
+10. Prints summary with URLs
 
 ### `boot down`
 
@@ -161,8 +165,19 @@ Shows a table of all services with:
 - Status (running / stopped / port in use)
 - Port numbers
 - PIDs (with mismatch warnings if PID file ≠ port owner)
+- Process name (what binary is actually running, e.g. `node`, `nuxt`)
 - Live health checks (curl)
 - Log file paths
+
+### `boot clean`
+
+Nukes everything for a fresh start:
+1. Removes `node_modules` in root and all sub-apps
+2. Removes lockfiles (`package-lock.json`, `yarn.lock`)
+3. Removes caches (`.nuxt`, `.next`, `.turbo`, `.vite`, `.parcel-cache`)
+4. Removes build outputs (`dist/`, `build/`)
+5. Removes `.boot/` runtime data (PIDs, logs)
+6. Pass `--all` to also remove `pnpm-lock.yaml`
 
 ### `boot reboot`
 

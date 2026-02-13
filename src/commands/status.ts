@@ -20,7 +20,7 @@ export async function status(): Promise<void> {
   log.header(`${config.name} — status`);
 
   const rows: string[][] = [];
-  rows.push(["SERVICE", "STATUS", "PORT", "PID", "HEALTH", "LOG"]);
+  rows.push(["SERVICE", "STATUS", "PORT", "PID", "PROCESS", "HEALTH", "LOG"]);
 
   // Docker services / containers
   if (config.docker) {
@@ -32,12 +32,12 @@ export async function status(): Promise<void> {
           : svc.status === "not found"
             ? `${RED}not found${RESET}`
             : `${YELLOW}${svc.status}${RESET}`;
-      rows.push([svc.name, statusColor, svc.ports || "—", "—", "—", "—"]);
+      rows.push([svc.name, statusColor, svc.ports || "—", "—", "docker", "—", "—"]);
     }
 
     if (dockerStatuses.length === 0 && config.docker.services) {
       for (const svc of config.docker.services) {
-        rows.push([svc.name, `${YELLOW}unknown${RESET}`, "—", "—", "—", "—"]);
+        rows.push([svc.name, `${YELLOW}unknown${RESET}`, "—", "—", "—", "—", "—"]);
       }
     }
   }
@@ -79,11 +79,16 @@ export async function status(): Promise<void> {
           : `${YELLOW}no response${RESET}`;
       }
 
+      // Process name (what binary is actually running)
+      const activePid = portPid || pid;
+      const processName = activePid ? getProcessName(activePid) : "—";
+
       rows.push([
         app.name,
         statusStr,
         portStr,
         pidStr,
+        processName,
         healthStr,
         hasLog ? lf : "—",
       ]);
@@ -92,6 +97,23 @@ export async function status(): Promise<void> {
 
   log.table(rows);
   log.blank();
+}
+
+/**
+ * Get the process name for a PID (e.g. "node", "nest", "nuxt").
+ */
+function getProcessName(pid: number): string {
+  try {
+    const name = execSync(`ps -p ${pid} -o comm= 2>/dev/null`, {
+      stdio: "pipe",
+    })
+      .toString()
+      .trim();
+    // Return just the binary name (strip path)
+    return name.split("/").pop() || name || "—";
+  } catch {
+    return "—";
+  }
 }
 
 /**

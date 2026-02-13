@@ -1,0 +1,29 @@
+{
+  "name": "boot",
+  "version": "0.1.0",
+  "description": "Dev stack lifecycle manager. One command to setup, start, stop, and reboot your projects.",
+  "author": "Treadie, Inc.",
+  "license": "MIT",
+  "bin": {
+    "boot": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

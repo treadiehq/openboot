@@ -1,0 +1,33 @@
+import { loadConfig } from "../lib/config";
+import { stopDocker } from "../lib/docker";
+import { stopAllApps } from "../lib/process";
+import { log } from "../lib/log";
+
+/**
+ * `boot down` — stop all services.
+ */
+export async function down(): Promise<void> {
+  let config;
+  try {
+    config = loadConfig();
+  } catch {
+    // Even without config, try to stop any running apps
+    log.info("No boot.yaml found — stopping any tracked processes...");
+    stopAllApps();
+    return;
+  }
+
+  log.header(`Stopping ${config.name}`);
+
+  // Stop app processes first
+  stopAllApps();
+
+  // Stop Docker services
+  if (config.docker) {
+    stopDocker(config);
+  }
+
+  log.blank();
+  log.success("All services stopped");
+  log.blank();
+}

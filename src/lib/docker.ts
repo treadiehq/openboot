@@ -120,18 +120,50 @@ function startContainers(containers: ContainerConfig[]): void {
 
     // Exists but stopped?
     if (containerExists(ct.name)) {
-      log.info(`Starting existing container ${ct.name}...`);
-      try {
-        execSync(`docker start ${ct.name}`, { stdio: "pipe" });
-        log.success(`${ct.name} started`);
-      } catch {
-        log.error(`Failed to start ${ct.name}`);
-        continue;
+      // Check if ports are free before trying docker start
+      let portConflict = false;
+      if (ct.ports) {
+        for (const p of ct.ports) {
+          const resolved = resolveHostPort(p);
+          if (resolved && isPortInUse(resolved.host)) {
+            portConflict = true;
+            break;
+          }
+        }
       }
-      if (ct.readyCheck) {
-        waitForContainer(ct.name, ct.readyCheck, ct.timeout || 30);
+
+      if (portConflict) {
+        // Port taken — remove old container and recreate with a free port
+        log.warn(`Port conflict for ${ct.name} — recreating on a free port...`);
+        try {
+          execSync(`docker rm -f ${ct.name}`, { stdio: "pipe" });
+        } catch {
+          // ignore
+        }
+        // Fall through to the "create new" block below
+      } else {
+        log.info(`Starting existing container ${ct.name}...`);
+        try {
+          execSync(`docker start ${ct.name}`, { stdio: "pipe" });
+          log.success(`${ct.name} started`);
+        } catch (err: any) {
+          // If start fails for another reason (e.g. stale network), recreate
+          log.warn(`docker start failed for ${ct.name} — recreating...`);
+          try {
+            execSync(`docker rm -f ${ct.name}`, { stdio: "pipe" });
+          } catch {
+            // ignore
+          }
+          // Fall through to create new
+        }
+
+        if (isContainerRunning(ct.name)) {
+          if (ct.readyCheck) {
+            waitForContainer(ct.name, ct.readyCheck, ct.timeout || 30);
+          }
+          continue;
+        }
       }
-      continue;
     }
 
     // Need to create — check port conflicts first

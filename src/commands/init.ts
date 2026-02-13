@@ -347,13 +347,29 @@ function detectRawContainers(cwd: string): ContainerConfig[] {
       const env = findEnvForContainer(allContent, name);
       if (Object.keys(env).length > 0) ct.env = env;
 
-      // Detect readyCheck based on image
+      // Detect readyCheck and ensure required env vars based on image
       if (ct.image.includes("postgres")) {
         ct.readyCheck = "pg_isready -U postgres";
         ct.timeout = 30;
+        // Postgres requires POSTGRES_PASSWORD to start
+        if (!ct.env) ct.env = {};
+        if (!ct.env.POSTGRES_PASSWORD) {
+          ct.env.POSTGRES_PASSWORD = "boot_dev_password";
+        }
+        if (!ct.env.POSTGRES_DB) {
+          // Derive DB name from container name (e.g. "ai-proxy-db" → "ai_proxy")
+          ct.env.POSTGRES_DB = ct.name
+            .replace(/-db$/, "")
+            .replace(/-postgres$/, "")
+            .replace(/-/g, "_");
+        }
       } else if (ct.image.includes("mysql") || ct.image.includes("mariadb")) {
         ct.readyCheck = "mysqladmin ping -h localhost";
         ct.timeout = 30;
+        if (!ct.env) ct.env = {};
+        if (!ct.env.MYSQL_ROOT_PASSWORD) {
+          ct.env.MYSQL_ROOT_PASSWORD = "boot_dev_password";
+        }
       } else if (ct.image.includes("redis")) {
         ct.readyCheck = "redis-cli ping";
         ct.timeout = 10;
@@ -487,11 +503,12 @@ function detectEnvRequirements(
   // Parse example file for required vars
   if (exampleFile) {
     const content = fs.readFileSync(path.join(cwd, exampleFile), "utf-8");
+    const lines = content.split("\n");
     const required: string[] = [];
     const reject: Record<string, string[]> = {};
 
-    for (const line of content.split("\n")) {
-      const trimmed = line.trim();
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
       if (!trimmed || trimmed.startsWith("#")) continue;
 
       const eq = trimmed.indexOf("=");
@@ -500,15 +517,25 @@ function detectEnvRequirements(
       const key = trimmed.substring(0, eq).trim();
       const val = trimmed.substring(eq + 1).trim();
 
-      // Common security-sensitive vars that should be required
-      const sensitivePatterns = [
-        "SECRET",
-        "KEY",
-        "PASSWORD",
-        "TOKEN",
-        "DATABASE_URL",
-      ];
-      if (sensitivePatterns.some((p) => key.toUpperCase().includes(p))) {
+      // Skip vars with empty values — they're optional
+      if (!val) continue;
+
+      // Check the comment above this line for "optional" / "if not set" hints
+      const prevLine = i > 0 ? lines[i - 1].toLowerCase() : "";
+      const prevPrevLine = i > 1 ? lines[i - 2].toLowerCase() : "";
+      const contextAbove = prevLine + " " + prevPrevLine;
+      if (
+        contextAbove.includes("optional") ||
+        contextAbove.includes("if not set") ||
+        contextAbove.includes("uncomment")
+      ) {
+        continue;
+      }
+
+      // Only mark truly essential vars as required:
+      // DATABASE_URL and JWT_SECRET are almost always needed
+      const essentialVars = ["DATABASE_URL", "JWT_SECRET"];
+      if (essentialVars.includes(key)) {
         required.push(key);
 
         // If the example value looks like a placeholder, add it to reject list
@@ -518,7 +545,6 @@ function detectEnvRequirements(
           val.includes("xxx") ||
           val.includes("replace")
         ) {
-          // Strip quotes
           let cleanVal = val;
           if (
             (cleanVal.startsWith('"') && cleanVal.endsWith('"')) ||

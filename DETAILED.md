@@ -24,6 +24,8 @@ boot agent init  → generate AI agent context (.cursorrules, AGENTS.md, CLAUDE.
 
 ## Install
 
+Requires Node 18+.
+
 ```bash
 npm install -g openboot
 ```
@@ -45,7 +47,7 @@ boot dev         # or: start + stream live logs (Ctrl+C stops all)
 boot agent init  # optional: generate AI agent context for Cursor, Copilot, Claude, Codex
 ```
 
-That's it. `boot init` detects your Docker setup, apps, package manager, env requirements, and generates the config.
+That's it. `boot init` detects your Docker setup, apps, package manager, env requirements, and generates the config. Boot doesn't replace your scripts—it orchestrates them: one place to maintain, and `boot init` / `boot agent init` do the rest so you rarely edit by hand.
 
 ## Config
 
@@ -428,6 +430,22 @@ For projects that use raw `docker run` (no compose):
 - Ports are freed before starting if occupied
 
 Add `.boot/` to your `.gitignore`.
+
+## Teams / company profiles (planned)
+
+A common ask is a **team- or company-level synced profile** that applies to **the whole tool** (setup, docker, env, agent, and beyond)—not just agent context. One shared rules set that everyone uses and that can be required as the baseline.
+
+**Use case (from feedback):**
+
+- **Scope:** Multiple repos, one **generic rules set** for all work. Covers things like: PR formats, don’t commit keys, run these tests, write scripts like this—general rules and conventions for everything the team does.
+- **Who maintains it:** The profile lives in a **git repo** (e.g. an internal “chell” or standards repo).
+- **How it’s applied:** **Settings with a git URL that always fetches and pulls.** When Boot runs, it resolves the team profile from that URL and merges it with the project config so the same baseline applies everywhere.
+
+**Possible direction:**
+
+- **Source of truth:** A git repo URL (or path) that holds the team’s profile—e.g. a `boot.yaml` fragment or a dedicated manifest (setup, env rules, agent conventions, PR/test/script rules, etc.).
+- **Merge:** On load, Boot fetches/pulls the team profile and merges it with the project’s `boot.yaml` (team as base, project overrides).
+- **Require:** Optional enforcement so “this repo must use the company profile” (e.g. CI check or Boot refusing to run until the team profile is applied).
 
 ## License
 

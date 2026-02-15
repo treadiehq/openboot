@@ -2,7 +2,7 @@
 
 > Stop writing start scripts. Stop copy-pasting agent files. Just boot.
 
-Every project has the same problem: a README that says "run these 12 commands to get started," a `start.sh` that half works, Docker containers you forgot to start, and env vars you didn't set. New teammates spend hours just trying to run the thing.
+Every project has the same problem: a README that says "run these 12 commands to get started," a `start.sh` that half works, Docker containers you forgot to start, and env vars you didn't set. New teammates spend hours just trying to run the thing. If that sounds familiar, Openboot is for you.
 
 Then there's the AI problem: every tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`. `SKILL.md`, `SOUL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between projects and files.
 
@@ -21,6 +21,8 @@ boot agent init  → generate AI agent context for your tools
 
 ## Install
 
+Requires Node 18+. Use `npx openboot` to avoid a global install.
+
 ```bash
 npm install -g openboot
 ```
@@ -33,11 +35,13 @@ boot setup       # install deps, start DB, run migrations
 boot dev         # start everything with live logs (Ctrl+C stops all)
 ```
 
-That's it. Boot detects your Docker services, apps, package manager, env requirements, and generates the config.
+That's it. Boot detects your Docker services, apps, package manager, env requirements, and generates the config. Boot doesn't replace your scripts, it runs them in the right order, together with Docker and env checks.
 
 ## AI Agent Context
 
 Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`. If those files already exist, Boot uses their content and does not overwrite them (only creates missing targets). Use `--overwrite` to replace existing files.
+
+**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev. Boot focuses on AI agent files. Editor config (.vscode ↔ .zed) and code-hub config (.github ↔ .forgejo) are a related "one source, many targets" problem we don't solve yet but planned.
 
 ```bash
 boot agent init      # generate from your stack + config
@@ -49,6 +53,8 @@ boot agent status    # see what Boot knows about your project
 ```
 
 Your conventions live in `~/.boot/agent/` and follow you to every project. When you run `boot agent init` in a new repo, your personal patterns are included automatically.
+
+**Teams / company profiles (planned).** We’re exploring a team/company mode for the **whole tool** (setup, docker, env, agent, and general rules like PR formats, no committing keys, run these tests). Profile would live in a git repo and be applied via a git URL that Boot fetches and merges with the project config so everyone uses the same baseline.
 
 Import from another project:
 

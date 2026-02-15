@@ -545,8 +545,8 @@ export function getOrDetectConfig(cwd: string): BootConfig {
 }
 
 /**
- * Add the agent section to an existing boot.yaml file.
- * Preserves existing content by appending at the end.
+ * Add the agent section to an existing config file.
+ * Handles both YAML and JSON formats, preserving existing content.
  */
 export function addAgentSection(
   configPath: string,
@@ -554,7 +554,16 @@ export function addAgentSection(
 ): void {
   const content = fs.readFileSync(configPath, "utf-8");
 
-  // Don't add if already present
+  if (configPath.endsWith(".json")) {
+    // JSON: parse, merge, and write back as formatted JSON
+    const json = JSON.parse(content);
+    if (json.agent) return;
+    json.agent = agentConfig;
+    fs.writeFileSync(configPath, JSON.stringify(json, null, 2) + "\n");
+    return;
+  }
+
+  // YAML: append section at the end
   if (/^agent:/m.test(content)) return;
 
   const section = yaml.stringify(

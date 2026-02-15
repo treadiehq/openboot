@@ -27,6 +27,34 @@ export async function dev(): Promise<void> {
 
   const projectRoot = process.cwd();
 
+  // Register shutdown handlers early so Ctrl+C during startup still cleans up
+  let logHandle: ReturnType<typeof tailAllLogs> | null = null;
+
+  const shutdown = () => {
+    if (logHandle) logHandle.stop();
+    log.blank();
+    log.header("Shutting down...");
+    log.blank();
+
+    // Stop apps
+    if (config.apps) {
+      stopAllApps(config.apps);
+    }
+
+    // Stop Docker
+    if (config.docker) {
+      stopDocker(config);
+    }
+
+    log.blank();
+    log.success(`${config.name} stopped`);
+    log.blank();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
+
   log.header(`${config.name} — dev mode`);
   log.blank();
 
@@ -72,33 +100,10 @@ export async function dev(): Promise<void> {
 
   log.blank();
 
-  // Stream logs — Ctrl+C stops everything
-  const handle = tailAllLogs(config);
+  // Stream logs — Ctrl+C stops everything via the shutdown handler above
+  logHandle = tailAllLogs(config);
 
-  await new Promise<void>((resolve) => {
-    const shutdown = () => {
-      handle.stop();
-      log.blank();
-      log.header("Shutting down...");
-      log.blank();
-
-      // Stop apps
-      if (config.apps) {
-        stopAllApps(config.apps);
-      }
-
-      // Stop Docker
-      if (config.docker) {
-        stopDocker(config);
-      }
-
-      log.blank();
-      log.success(`${config.name} stopped`);
-      log.blank();
-      resolve();
-    };
-
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
+  await new Promise<void>(() => {
+    // Keep the process alive; shutdown is handled by the signal handlers
   });
 }

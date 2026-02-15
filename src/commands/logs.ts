@@ -1,8 +1,20 @@
 import * as fs from "fs";
 import * as path from "path";
-import { execSync, spawn } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import { loadConfig } from "../lib/config";
 import { log } from "../lib/log";
+
+/**
+ * Validate and sanitize the line count argument.
+ * Must be a positive integer string to prevent injection.
+ */
+function sanitizeLineCount(value: string): string {
+  const n = parseInt(value, 10);
+  if (!Number.isFinite(n) || n < 1) {
+    return "40"; // safe default
+  }
+  return String(n);
+}
 
 const LOGS_DIR = path.join(".boot", "logs");
 
@@ -26,7 +38,7 @@ export async function logs(
     config = null;
   }
 
-  const lineCount = options.lines || "40";
+  const lineCount = sanitizeLineCount(options.lines || "40");
 
   // If no service specified, list available logs or show all
   if (!service) {
@@ -80,7 +92,7 @@ export async function logs(
     // Just show last N lines
     log.header(`${service} logs`);
     try {
-      const output = execSync(`tail -n ${lineCount} "${logFile}"`, {
+      const output = execFileSync("tail", ["-n", lineCount, logFile], {
         stdio: "pipe",
       })
         .toString()
@@ -131,7 +143,7 @@ function showAllLogs(lineCount: string): void {
     log.blank();
 
     try {
-      const output = execSync(`tail -n ${lineCount} "${fullPath}"`, {
+      const output = execFileSync("tail", ["-n", lineCount, fullPath], {
         stdio: "pipe",
       })
         .toString()
@@ -168,7 +180,7 @@ function showDockerLogs(
   } else {
     log.header(`${container} (Docker)`);
     try {
-      execSync(`docker logs --tail ${lineCount || "40"} ${container}`, {
+      execFileSync("docker", ["logs", "--tail", lineCount || "40", container], {
         stdio: "inherit",
       });
     } catch {

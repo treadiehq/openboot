@@ -1,5 +1,5 @@
 import * as fs from "fs";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { loadConfig } from "../lib/config";
 import { getDockerStatus } from "../lib/docker";
 import { getAppStatus, logFile } from "../lib/process";
@@ -26,18 +26,24 @@ export async function status(): Promise<void> {
   if (config.docker) {
     const dockerStatuses = getDockerStatus(config);
     // Collect readyCheck info for DB connection testing
-    const readyChecks = new Map<string, string>();
+    const readyChecks = new Map<string, { container: string; check: string }>();
     if (config.docker.services) {
       for (const svc of config.docker.services) {
         if (svc.readyCheck) {
-          readyChecks.set(svc.name, `${svc.container || svc.name}|${svc.readyCheck}`);
+          readyChecks.set(svc.name, {
+            container: svc.container || svc.name,
+            check: svc.readyCheck,
+          });
         }
       }
     }
     if (config.docker.containers) {
       for (const ct of config.docker.containers) {
         if (ct.readyCheck) {
-          readyChecks.set(ct.name, `${ct.name}|${ct.readyCheck}`);
+          readyChecks.set(ct.name, {
+            container: ct.name,
+            check: ct.readyCheck,
+          });
         }
       }
     }
@@ -55,8 +61,7 @@ export async function status(): Promise<void> {
       if (svc.status === "running") {
         const checkInfo = readyChecks.get(svc.name);
         if (checkInfo) {
-          const [container, check] = checkInfo.split("|");
-          healthStr = testContainerHealth(container, check)
+          healthStr = testContainerHealth(checkInfo.container, checkInfo.check)
             ? `${GREEN}connected${RESET}`
             : `${RED}failing${RESET}`;
         } else {
@@ -136,7 +141,9 @@ export async function status(): Promise<void> {
  */
 function testContainerHealth(container: string, check: string): boolean {
   try {
-    execSync(`docker exec ${container} ${check}`, { stdio: "pipe" });
+    execFileSync("docker", ["exec", container, "sh", "-c", check], {
+      stdio: "pipe",
+    });
     return true;
   } catch {
     return false;
@@ -148,7 +155,7 @@ function testContainerHealth(container: string, check: string): boolean {
  */
 function getProcessName(pid: number): string {
   try {
-    const name = execSync(`ps -p ${pid} -o comm= 2>/dev/null`, {
+    const name = execFileSync("ps", ["-p", String(pid), "-o", "comm="], {
       stdio: "pipe",
     })
       .toString()
@@ -165,8 +172,9 @@ function getProcessName(pid: number): string {
  */
 function checkHealth(url: string): boolean {
   try {
-    const result = execSync(
-      `curl -sf -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 "${url}"`,
+    const result = execFileSync(
+      "curl",
+      ["-sf", "-o", "/dev/null", "-w", "%{http_code}", "--connect-timeout", "2", "--max-time", "3", url],
       { stdio: "pipe" }
     )
       .toString()

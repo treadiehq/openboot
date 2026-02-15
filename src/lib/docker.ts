@@ -1,4 +1,4 @@
-import { execSync, spawnSync } from "child_process";
+import { execFileSync, spawnSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
@@ -8,18 +8,23 @@ import { isPortInUse } from "./ports";
 
 // ─── Helpers ────────────────────────────────────────────────
 
-function getComposeCmd(): string {
+interface ComposeCmd {
+  bin: string;
+  baseArgs: string[];
+}
+
+function getComposeCmd(): ComposeCmd {
   try {
-    execSync("docker compose version", { stdio: "pipe" });
-    return "docker compose";
+    execFileSync("docker", ["compose", "version"], { stdio: "pipe" });
+    return { bin: "docker", baseArgs: ["compose"] };
   } catch {
-    return "docker-compose";
+    return { bin: "docker-compose", baseArgs: [] };
   }
 }
 
 export function isDockerAvailable(): boolean {
   try {
-    execSync("docker info", { stdio: "pipe" });
+    execFileSync("docker", ["info"], { stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -28,8 +33,9 @@ export function isDockerAvailable(): boolean {
 
 function isContainerRunning(container: string): boolean {
   try {
-    const status = execSync(
-      `docker inspect -f '{{.State.Status}}' ${container}`,
+    const status = execFileSync(
+      "docker",
+      ["inspect", "-f", "{{.State.Status}}", container],
       { stdio: "pipe" }
     )
       .toString()
@@ -42,7 +48,7 @@ function isContainerRunning(container: string): boolean {
 
 function containerExists(container: string): boolean {
   try {
-    execSync(`docker inspect ${container}`, { stdio: "pipe" });
+    execFileSync("docker", ["inspect", container], { stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -57,7 +63,9 @@ function waitForContainer(
   log.info(`Waiting for ${container}...`);
   for (let i = 0; i < timeout; i++) {
     try {
-      execSync(`docker exec ${container} ${check}`, { stdio: "pipe" });
+      execFileSync("docker", ["exec", container, "sh", "-c", check], {
+        stdio: "pipe",
+      });
       log.success(`${container} is ready`);
       return;
     } catch {
@@ -136,7 +144,7 @@ function startContainers(containers: ContainerConfig[]): void {
         // Port taken — remove old container and recreate with a free port
         log.warn(`Port conflict for ${ct.name} — recreating on a free port...`);
         try {
-          execSync(`docker rm -f ${ct.name}`, { stdio: "pipe" });
+          execFileSync("docker", ["rm", "-f", ct.name], { stdio: "pipe" });
         } catch {
           // ignore
         }
@@ -144,13 +152,13 @@ function startContainers(containers: ContainerConfig[]): void {
       } else {
         log.info(`Starting existing container ${ct.name}...`);
         try {
-          execSync(`docker start ${ct.name}`, { stdio: "pipe" });
+          execFileSync("docker", ["start", ct.name], { stdio: "pipe" });
           log.success(`${ct.name} started`);
         } catch (err: any) {
           // If start fails for another reason (e.g. stale network), recreate
           log.warn(`docker start failed for ${ct.name} — recreating...`);
           try {
-            execSync(`docker rm -f ${ct.name}`, { stdio: "pipe" });
+            execFileSync("docker", ["rm", "-f", ct.name], { stdio: "pipe" });
           } catch {
             // ignore
           }
@@ -167,7 +175,7 @@ function startContainers(containers: ContainerConfig[]): void {
     }
 
     // Need to create — check port conflicts first
-    let portFlags = "";
+    const portArgs: string[] = [];
     if (ct.ports) {
       for (const p of ct.ports) {
         const resolved = resolveHostPort(p);
@@ -177,7 +185,7 @@ function startContainers(containers: ContainerConfig[]): void {
             log.warn(
               `Port ${resolved.host} in use — using ${freePort} for ${ct.name}`
             );
-            portFlags += ` -p ${freePort}:${resolved.container}`;
+            portArgs.push("-p", `${freePort}:${resolved.container}`);
           } else {
             log.error(
               `Port ${resolved.host} in use and no free port found for ${ct.name}`
@@ -185,31 +193,32 @@ function startContainers(containers: ContainerConfig[]): void {
             continue;
           }
         } else if (resolved) {
-          portFlags += ` -p ${resolved.host}:${resolved.container}`;
+          portArgs.push("-p", `${resolved.host}:${resolved.container}`);
         }
       }
     }
 
-    // Build env flags
-    let envFlags = "";
+    // Build env args
+    const envArgs: string[] = [];
     if (ct.env) {
       for (const [k, v] of Object.entries(ct.env)) {
-        envFlags += ` -e "${k}=${v}"`;
+        envArgs.push("-e", `${k}=${v}`);
       }
     }
 
-    // Build volume flags
-    let volFlags = "";
+    // Build volume args
+    const volArgs: string[] = [];
     if (ct.volumes) {
       for (const v of ct.volumes) {
-        volFlags += ` -v ${v}`;
+        volArgs.push("-v", v);
       }
     }
 
     log.info(`Creating container ${ct.name}...`);
     try {
-      execSync(
-        `docker run -d --name ${ct.name}${portFlags}${envFlags}${volFlags} ${ct.image}`,
+      execFileSync(
+        "docker",
+        ["run", "-d", "--name", ct.name, ...portArgs, ...envArgs, ...volArgs, ct.image],
         { stdio: "pipe" }
       );
       log.success(`${ct.name} started`);
@@ -232,7 +241,7 @@ function stopContainers(containers: ContainerConfig[]): void {
     if (isContainerRunning(ct.name)) {
       log.info(`Stopping ${ct.name}...`);
       try {
-        execSync(`docker stop ${ct.name}`, { stdio: "pipe" });
+        execFileSync("docker", ["stop", ct.name], { stdio: "pipe" });
         log.success(`${ct.name} stopped`);
       } catch {
         log.error(`Failed to stop ${ct.name}`);
@@ -256,8 +265,9 @@ function getContainersStatus(
     let ports = "";
 
     try {
-      status = execSync(
-        `docker inspect -f '{{.State.Status}}' ${ct.name}`,
+      status = execFileSync(
+        "docker",
+        ["inspect", "-f", "{{.State.Status}}", ct.name],
         { stdio: "pipe" }
       )
         .toString()
@@ -268,8 +278,9 @@ function getContainersStatus(
 
     if (status === "running") {
       try {
-        const portInfo = execSync(
-          `docker port ${ct.name}`,
+        const portInfo = execFileSync(
+          "docker",
+          ["port", ct.name],
           { stdio: "pipe" }
         )
           .toString()
@@ -317,7 +328,7 @@ function startComposeServices(config: BootConfig): void {
       const container = svc.container || svc.name;
       if (!isContainerRunning(container)) {
         try {
-          execSync(`docker start ${container}`, { stdio: "pipe" });
+          execFileSync("docker", ["start", container], { stdio: "pipe" });
           log.success(`${container} started`);
         } catch {
           log.error(`Failed to start ${container}`);
@@ -332,6 +343,8 @@ function startComposeServices(config: BootConfig): void {
   const conflicts = getComposePortConflicts(file);
 
   if (conflicts.length > 0) {
+    const conflictingServiceNames = new Set(conflicts.map((c) => c.service));
+
     for (const conflict of conflicts) {
       const freePort = findFreePort(conflict.hostPort);
       if (!freePort) {
@@ -350,17 +363,21 @@ function startComposeServices(config: BootConfig): void {
       const svc = services.find((s) => s.name === conflict.service);
       const container = svc?.container || conflict.service;
       const envVars = getComposeServiceEnv(file, conflict.service);
-      const envFlags = envVars.map((e) => `-e "${e}"`).join(" ");
+      const envArgs: string[] = [];
+      for (const e of envVars) {
+        envArgs.push("-e", e);
+      }
 
       try {
-        execSync(`docker rm -f ${container} 2>/dev/null`, { stdio: "pipe" });
+        execFileSync("docker", ["rm", "-f", container], { stdio: "pipe" });
       } catch {
         // ignore
       }
 
       try {
-        execSync(
-          `docker run -d --name ${container} -p ${freePort}:${conflict.containerPort} ${envFlags} ${image}`,
+        execFileSync(
+          "docker",
+          ["run", "-d", "--name", container, "-p", `${freePort}:${conflict.containerPort}`, ...envArgs, image],
           { stdio: "pipe" }
         );
         log.success(
@@ -372,6 +389,24 @@ function startComposeServices(config: BootConfig): void {
       }
     }
 
+    // Start remaining non-conflicting services via compose
+    const nonConflicting = getComposeServiceNames(file).filter(
+      (name) => !conflictingServiceNames.has(name)
+    );
+
+    if (nonConflicting.length > 0) {
+      log.info("Starting remaining Docker services...");
+      try {
+        execFileSync(
+          compose.bin,
+          [...compose.baseArgs, "-f", file, "up", "-d", ...nonConflicting],
+          { stdio: "inherit" }
+        );
+      } catch {
+        log.error("Failed to start remaining Docker services");
+      }
+    }
+
     waitForAllComposeServices(services);
     return;
   }
@@ -379,7 +414,9 @@ function startComposeServices(config: BootConfig): void {
   // 4. Normal compose up
   log.info("Starting Docker services...");
   try {
-    execSync(`${compose} -f ${file} up -d`, { stdio: "inherit" });
+    execFileSync(compose.bin, [...compose.baseArgs, "-f", file, "up", "-d"], {
+      stdio: "inherit",
+    });
   } catch {
     log.error("Failed to start Docker services");
     return;
@@ -396,7 +433,9 @@ function stopComposeServices(config: BootConfig): void {
 
   log.info("Stopping Docker services...");
   try {
-    execSync(`${compose} -f ${file} down`, { stdio: "inherit" });
+    execFileSync(compose.bin, [...compose.baseArgs, "-f", file, "down"], {
+      stdio: "inherit",
+    });
     log.success("Docker services stopped");
   } catch {
     log.error("Failed to stop Docker services");
@@ -451,6 +490,19 @@ function getComposePortConflicts(
   }
 
   return conflicts;
+}
+
+function getComposeServiceNames(composeFile: string): string[] {
+  try {
+    const raw = fs.readFileSync(path.resolve(composeFile), "utf-8");
+    const compose = yaml.parse(raw);
+    if (compose?.services) {
+      return Object.keys(compose.services);
+    }
+  } catch {
+    // Can't parse
+  }
+  return [];
 }
 
 function getComposeServiceImage(
@@ -544,8 +596,9 @@ export function getDockerStatus(
       const container = svc.container || svc.name;
       let status = "unknown";
       try {
-        status = execSync(
-          `docker inspect -f '{{.State.Status}}' ${container}`,
+        status = execFileSync(
+          "docker",
+          ["inspect", "-f", "{{.State.Status}}", container],
           { stdio: "pipe" }
         )
           .toString()

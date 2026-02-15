@@ -230,23 +230,29 @@ function extractPkillPatterns(command: string): string[] {
 
 /**
  * Stop all apps. Accepts optional app configs for smarter stopping.
+ * Always sweeps PID files to catch orphaned processes not in the current config.
  */
 export function stopAllApps(apps?: AppConfig[]): void {
+  const stoppedNames = new Set<string>();
+
   // If we have app configs, use them (enables pkill + port fallback)
   if (apps) {
     for (const app of apps) {
       stopApp(app);
+      stoppedNames.add(app.name);
     }
-    return;
   }
 
-  // Fallback: just use PID files
+  // Always sweep PID files to clean up orphaned processes
+  // (e.g. apps removed from config while still running)
   if (!fs.existsSync(PIDS_DIR)) return;
 
   const files = fs.readdirSync(PIDS_DIR).filter((f) => f.endsWith(".pid"));
   for (const f of files) {
     const name = f.replace(".pid", "");
-    stopApp(name);
+    if (!stoppedNames.has(name)) {
+      stopApp(name);
+    }
   }
 }
 

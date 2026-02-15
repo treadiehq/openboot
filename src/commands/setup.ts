@@ -138,9 +138,10 @@ function smartPrismaSetup(): void {
     const appDir = path.dirname(prismaDir);
     const pm = getPackageManager();
 
-    // Generate Prisma client
-    const prismaClient = path.join(appDir, "node_modules", ".prisma");
-    if (!fs.existsSync(prismaClient)) {
+    // Generate Prisma client (check both local and root node_modules for monorepos)
+    const localPrismaClient = path.join(appDir, "node_modules", ".prisma");
+    const rootPrismaClient = path.join(cwd, "node_modules", ".prisma");
+    if (!fs.existsSync(localPrismaClient) && !fs.existsSync(rootPrismaClient)) {
       log.info(`Generating Prisma client (${loc})...`);
       const runCmd = pm === "npm" ? "npx" : pm;
       try {

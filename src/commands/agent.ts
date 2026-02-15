@@ -73,7 +73,7 @@ export function registerAgentCommands(program: Command): void {
           log.info(`Existing agent files: ${existingFiles.join(", ")}`);
         }
 
-        // Add agent section to boot.yaml if it exists but has no agent config
+        // Add agent section to config file if it exists but has no agent config
         const configPath = findConfig(cwd);
         if (configPath && !config.agent) {
           const defaultAgent: AgentConfig = {
@@ -81,7 +81,7 @@ export function registerAgentCommands(program: Command): void {
           };
           addAgentSection(configPath, defaultAgent);
           config.agent = defaultAgent;
-          log.success("Added agent section to boot.yaml");
+          log.success(`Added agent section to ${path.basename(configPath)}`);
         }
 
         // Generate and sync (include existing agent file content; don't overwrite existing targets by default)
@@ -103,7 +103,7 @@ export function registerAgentCommands(program: Command): void {
         log.blank();
         log.step("Agent context synced to all targets.");
         log.step(
-          "Edit the agent section in boot.yaml to add conventions."
+          `Edit the agent section in ${configPath ? path.basename(configPath) : "boot.yaml"} to add conventions.`
         );
         log.step("Run `boot agent sync` after making changes.");
         log.blank();

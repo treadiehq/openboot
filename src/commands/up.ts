@@ -194,8 +194,12 @@ function validateEnv(config: BootConfig): boolean {
       val = val.slice(1, -1);
     }
     envVars[key] = val;
-    // Also set in process.env so apps inherit them
-    process.env[key] = val;
+    // Also set in process.env so apps inherit them,
+    // but only if not already defined — existing env takes precedence
+    // (prevents clobbering critical vars like PATH, HOME, etc.)
+    if (process.env[key] === undefined) {
+      process.env[key] = val;
+    }
   }
 
   let valid = true;
@@ -302,9 +306,11 @@ function smartPrismaCheck(
 
     // Determine the app directory (parent of prisma/)
     const appDir = path.dirname(prismaDir);
-    const prismaClient = path.join(appDir, "node_modules", ".prisma");
+    // Check both local and root node_modules for monorepos
+    const localPrismaClient = path.join(appDir, "node_modules", ".prisma");
+    const rootPrismaClient = path.join(projectRoot, "node_modules", ".prisma");
 
-    if (!fs.existsSync(prismaClient)) {
+    if (!fs.existsSync(localPrismaClient) && !fs.existsSync(rootPrismaClient)) {
       log.info(`Generating Prisma client (${loc})...`);
       const runCmd = pm === "npm" ? "npx" : pm;
       try {

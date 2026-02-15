@@ -34,6 +34,11 @@ export function loadConfig(dir: string = process.cwd()): BootConfig {
     config = yaml.parse(raw);
   }
 
+  // Guard against empty files (yaml.parse returns null) or primitive values
+  if (!config || typeof config !== "object") {
+    config = {} as BootConfig;
+  }
+
   if (!config.name) {
     config.name = path.basename(dir);
   }

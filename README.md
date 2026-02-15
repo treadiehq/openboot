@@ -63,7 +63,7 @@ boot agent init --from ~/other-project
 
 ## Team Profiles
 
-Share a company-wide baseline across every repo. The team profile lives in a git repo and covers the whole tool — setup commands, env rules, agent conventions, everything. Boot fetches it and merges it under your project config so the team baseline always applies.
+Share a company-wide baseline across every repo. The team profile lives in a git repo and covers the whole tool, setup commands, env rules, agent conventions, everything. Boot fetches it and merges it under your project config so the team baseline always applies.
 
 ```bash
 boot team set git@github.com:company/boot-standards.git   # connect

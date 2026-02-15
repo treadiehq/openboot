@@ -392,7 +392,7 @@ The generated markdown includes (when available):
 
 Point your agent context at any git repo. Boot clones it to a global cache (`~/.boot/references/`), keeps it updated (auto-pull every 10 minutes), and includes the content in the generated agent markdown.
 
-**Short form** — just a URL, includes the README:
+**Short form**, just a URL, includes the README:
 
 ```yaml
 agent:
@@ -468,7 +468,7 @@ Add `.boot/` to your `.gitignore`.
 
 ## Team Profiles
 
-Share a company-wide baseline across every repo. The team profile lives in a git repo and applies to the **whole tool** — setup commands, env rules, agent conventions, everything.
+Share a company-wide baseline across every repo. The team profile lives in a git repo and applies to the **whole tool**, setup commands, env rules, agent conventions, everything.
 
 ### Config
 

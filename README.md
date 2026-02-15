@@ -120,12 +120,27 @@ agent:
   conventions:
     - Use server components by default
     - All DB access through Prisma
+  references:
+    - git@github.com:Effect-TS/effect.git
   targets:
     - .cursorrules
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
 ```
+
+## References
+
+Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the README in your agent context so AI tools can answer questions about it.
+
+```yaml
+agent:
+  references:
+    - git@github.com:Effect-TS/effect.git
+    - https://github.com/drizzle-team/drizzle-orm.git
+```
+
+The referenced repos are cloned to `~/.boot/references/` and auto-refreshed. Their READMEs appear in a **References** section in the generated agent markdown.
 
 ## Docs
 

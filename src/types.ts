@@ -44,6 +44,9 @@ export interface AgentConfig {
 
   /** Target files to sync agent context to */
   targets?: string[];
+
+  /** Git repo URLs to clone and include as reference context for AI agents */
+  references?: string[];
 }
 
 export interface EnvConfig {

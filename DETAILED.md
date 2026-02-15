@@ -152,6 +152,7 @@ agent:
 | `agent.description` | Project description included in AI agent context |
 | `agent.conventions` | Coding conventions for AI agents to follow |
 | `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
+| `agent.references` | Git repo URLs to clone and include as reference context for AI agents |
 | **team** | |
 | `team.url` | Git URL (SSH or HTTPS) of the team profile repo |
 | `team.required` | If true, Boot fails when the team profile can't be resolved |
@@ -385,6 +386,22 @@ The generated markdown includes (when available):
 - **Conventions** — from `boot.yaml` agent section
 - **Personal Conventions** — from `~/.boot/agent/conventions.md`
 - **Remembered Patterns** — from `~/.boot/agent/memory.md`
+- **References** — README content from repos listed in `agent.references`
+
+### References
+
+Point your agent context at any git repo. Boot clones it to a global cache (`~/.boot/references/`), keeps it updated (auto-pull every 10 minutes), and includes the README in the generated agent markdown.
+
+```yaml
+agent:
+  references:
+    - git@github.com:Effect-TS/effect.git
+    - https://github.com/drizzle-team/drizzle-orm.git
+```
+
+This gives your AI tools context about the libraries you depend on without manually copying docs. The README from each referenced repo appears under a **References** section in the agent output, labeled by repo name (e.g. `Effect-TS/effect`).
+
+READMEs are capped at 15,000 characters to keep agent context files reasonable. Team profiles can also define references — they get merged with project references.
 
 ### Stack Detection
 

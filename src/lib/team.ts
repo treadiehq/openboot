@@ -363,11 +363,16 @@ export function mergeConfigs(
         ...(projAgent.conventions || []),
       ]),
       targets: projAgent.targets || teamAgent.targets,
+      references: dedup([
+        ...(teamAgent.references || []),
+        ...(projAgent.references || []),
+      ]),
     };
 
     // Clean up
     if (!merged.agent.description) delete merged.agent.description;
     if (merged.agent.conventions!.length === 0) delete merged.agent.conventions;
+    if (merged.agent.references!.length === 0) delete merged.agent.references;
     if (!merged.agent.targets) delete merged.agent.targets;
   }
 

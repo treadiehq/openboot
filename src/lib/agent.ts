@@ -4,6 +4,7 @@ import * as os from "os";
 import * as yaml from "yaml";
 import { BootConfig, AgentConfig } from "../types";
 import { detectPackageManager, findConfig, loadConfig, getTeamConfigSeparately } from "./config";
+import { resolveAllReferences } from "./references";
 
 // ────────────────────────────────────────────────
 // Constants
@@ -471,6 +472,32 @@ export function generateAgentMarkdown(
         lines.push(`- ${m}`);
       }
       lines.push("");
+    }
+  }
+
+  // ── References (git repos cloned as context) ──
+  if (config.agent?.references && config.agent.references.length > 0) {
+    const refs = resolveAllReferences(config.agent.references);
+    if (refs.length > 0) {
+      lines.push("## References");
+      lines.push("");
+      for (const ref of refs) {
+        lines.push(`### ${ref.name}`);
+        lines.push("");
+        lines.push(`Source: ${ref.url}`);
+        lines.push("");
+        if (ref.readme) {
+          lines.push(ref.readme);
+          lines.push("");
+        } else if (ref.structure) {
+          lines.push("Top-level structure:");
+          lines.push("");
+          for (const entry of ref.structure) {
+            lines.push(`- ${entry}`);
+          }
+          lines.push("");
+        }
+      }
     }
   }
 

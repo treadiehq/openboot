@@ -1,6 +1,6 @@
 {
   "name": "openboot",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Stop writing start scripts. Stop copy-pasting agent files. Just boot",
   "author": "Treadie, Inc.",
   "license": "FSL-1.1-MIT",

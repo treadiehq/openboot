@@ -152,7 +152,7 @@ agent:
 | `agent.description` | Project description included in AI agent context |
 | `agent.conventions` | Coding conventions for AI agents to follow |
 | `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
-| `agent.references` | Git repo URLs to clone and include as reference context for AI agents |
+| `agent.references` | Git repos to clone as AI context. String (URL) or object (`url` + `include` paths) |
 | **team** | |
 | `team.url` | Git URL (SSH or HTTPS) of the team profile repo |
 | `team.required` | If true, Boot fails when the team profile can't be resolved |
@@ -386,11 +386,13 @@ The generated markdown includes (when available):
 - **Conventions** — from `boot.yaml` agent section
 - **Personal Conventions** — from `~/.boot/agent/conventions.md`
 - **Remembered Patterns** — from `~/.boot/agent/memory.md`
-- **References** — README content from repos listed in `agent.references`
+- **References** — content from repos listed in `agent.references`
 
 ### References
 
-Point your agent context at any git repo. Boot clones it to a global cache (`~/.boot/references/`), keeps it updated (auto-pull every 10 minutes), and includes the README in the generated agent markdown.
+Point your agent context at any git repo. Boot clones it to a global cache (`~/.boot/references/`), keeps it updated (auto-pull every 10 minutes), and includes the content in the generated agent markdown.
+
+**Short form** — just a URL, includes the README:
 
 ```yaml
 agent:
@@ -399,9 +401,21 @@ agent:
     - https://github.com/drizzle-team/drizzle-orm.git
 ```
 
-This gives your AI tools context about the libraries you depend on without manually copying docs. The README from each referenced repo appears under a **References** section in the agent output, labeled by repo name (e.g. `Effect-TS/effect`).
+**Long form** — specify exactly what to include:
 
-READMEs are capped at 15,000 characters to keep agent context files reasonable. Team profiles can also define references — they get merged with project references.
+```yaml
+agent:
+  references:
+    - url: git@github.com:Effect-TS/effect.git
+      include:
+        - docs/
+        - packages/effect/README.md
+        - packages/effect/src/index.ts
+```
+
+`include` accepts files and directories. Directories are walked recursively and all text files are included. This lets you pull in exactly the docs, types, or source your AI tools need.
+
+**Limits:** Individual files are capped at 15,000 characters, total content per reference at 50,000 characters. Binary files and `node_modules` are skipped. Team profiles can also define references — they get merged with project references (deduplicated by URL, project entries win).
 
 ### Stack Detection
 

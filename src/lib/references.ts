@@ -3,6 +3,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import { log } from "./log";
+import { ReferenceEntry, ReferenceConfig } from "../types";
 
 // ────────────────────────────────────────────────
 // Constants
@@ -24,8 +25,28 @@ const README_NAMES = [
   "README",
 ];
 
-/** Max README size to include (characters). Keeps agent context reasonable. */
-const MAX_README_SIZE = 15_000;
+/** Max size per file to include (characters). */
+const MAX_FILE_SIZE = 15_000;
+
+/** Max total size across all files in a single reference (characters). */
+const MAX_TOTAL_SIZE = 50_000;
+
+// ────────────────────────────────────────────────
+// Normalize
+// ────────────────────────────────────────────────
+
+/** Normalize a ReferenceEntry to a ReferenceConfig. */
+export function normalizeRef(entry: ReferenceEntry): ReferenceConfig {
+  if (typeof entry === "string") {
+    return { url: entry };
+  }
+  return entry;
+}
+
+/** Get the URL from any reference entry. */
+export function refUrl(entry: ReferenceEntry): string {
+  return typeof entry === "string" ? entry : entry.url;
+}
 
 // ────────────────────────────────────────────────
 // Cache / Git Operations
@@ -105,7 +126,7 @@ function pullRef(url: string, force: boolean = false): void {
   if (!force) {
     const meta = readMeta(url);
     if (meta && Date.now() - meta.lastPull < PULL_TTL_MS) {
-      return; // Cache is fresh
+      return;
     }
   }
 
@@ -113,38 +134,32 @@ function pullRef(url: string, force: boolean = false): void {
     execSync(`git -C ${dir} fetch --depth 1 origin`, { stdio: "pipe" });
     execSync(`git -C ${dir} reset --hard origin/HEAD`, { stdio: "pipe" });
   } catch {
-    // Silently use cached version
     return;
   }
   writeMeta(url);
 }
 
 // ────────────────────────────────────────────────
-// Resolve + Extract
+// Name / Resolve
 // ────────────────────────────────────────────────
 
 /**
  * Derive a human-readable name from a git URL.
- * e.g. "git@github.com:Effect-TS/effect.git" → "Effect-TS/effect"
- * e.g. "https://github.com/drizzle-team/drizzle-orm.git" → "drizzle-team/drizzle-orm"
  */
 export function repoNameFromUrl(url: string): string {
-  // SSH: git@github.com:Org/Repo.git
   const sshMatch = url.match(/:([^/]+\/[^/]+?)(?:\.git)?$/);
   if (sshMatch) return sshMatch[1];
 
-  // HTTPS: https://github.com/Org/Repo.git
   const httpsMatch = url.match(/\/([^/]+\/[^/]+?)(?:\.git)?$/);
   if (httpsMatch) return httpsMatch[1];
 
-  // Fallback: last path segment
   return path.basename(url, ".git");
 }
 
 /**
- * Ensure a reference repo is cloned and up to date. Returns the repo path.
+ * Ensure a reference repo is cloned and up to date.
  */
-export function resolveReference(url: string): string | null {
+function resolveReference(url: string): string | null {
   ensureGit();
 
   const dir = repoDir(url);
@@ -159,44 +174,152 @@ export function resolveReference(url: string): string | null {
   return dir;
 }
 
-/**
- * Extract the README content from a cached reference repo.
- * Returns null if no README found.
- */
-export function extractReadme(url: string): string | null {
-  const dir = repoDir(url);
-  if (!fs.existsSync(dir)) return null;
+// ────────────────────────────────────────────────
+// Content Extraction
+// ────────────────────────────────────────────────
 
+/** A single file extracted from a reference repo. */
+export interface ExtractedFile {
+  /** Path relative to the repo root */
+  path: string;
+  /** File content (possibly truncated) */
+  content: string;
+}
+
+/**
+ * Extract the README from a repo.
+ */
+function extractReadme(dir: string, url: string): ExtractedFile | null {
   for (const name of README_NAMES) {
     const readmePath = path.join(dir, name);
     if (fs.existsSync(readmePath) && fs.statSync(readmePath).isFile()) {
       try {
         let content = fs.readFileSync(readmePath, "utf-8").trim();
-        if (content.length > MAX_README_SIZE) {
+        if (content.length > MAX_FILE_SIZE) {
           content =
-            content.slice(0, MAX_README_SIZE) +
+            content.slice(0, MAX_FILE_SIZE) +
             "\n\n<!-- Truncated — full content at " + url + " -->";
         }
-        return content;
+        return { path: name, content };
       } catch {
         return null;
       }
     }
   }
-
   return null;
 }
 
 /**
- * Get a brief summary of the repo structure (top-level files/dirs).
+ * Check if a path looks like a text file we should include.
  */
-export function extractStructure(url: string): string[] | null {
-  const dir = repoDir(url);
-  if (!fs.existsSync(dir)) return null;
+function isTextFile(filePath: string): boolean {
+  const textExtensions = [
+    ".md", ".txt", ".rst", ".ts", ".tsx", ".js", ".jsx",
+    ".py", ".go", ".rs", ".java", ".kt", ".swift", ".rb",
+    ".yaml", ".yml", ".toml", ".json", ".cfg", ".ini",
+    ".css", ".scss", ".html", ".xml", ".svg",
+    ".sh", ".bash", ".zsh", ".fish",
+    ".sql", ".graphql", ".gql", ".prisma",
+    ".d.ts", ".mts", ".cts", ".mjs", ".cjs",
+  ];
+  const ext = path.extname(filePath).toLowerCase();
+  const base = path.basename(filePath).toLowerCase();
+
+  // Known text files without extensions
+  if (["makefile", "dockerfile", "readme", "license", "changelog"].includes(base)) {
+    return true;
+  }
+
+  return textExtensions.includes(ext);
+}
+
+/**
+ * Collect files matching an include path.
+ * - If it is a file, include it directly.
+ * - If it is a directory, include all text files recursively.
+ */
+function collectFiles(
+  dir: string,
+  includePath: string,
+  maxTotal: number
+): ExtractedFile[] {
+  const results: ExtractedFile[] = [];
+  let totalSize = 0;
+
+  const fullPath = path.join(dir, includePath);
+
+  // Direct file
+  if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+    const file = readFileContent(dir, includePath);
+    if (file) results.push(file);
+    return results;
+  }
+
+  // Directory — walk recursively
+  if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
+    const walkDir = (dirPath: string, relBase: string) => {
+      if (totalSize >= maxTotal) return;
+
+      let entries: string[];
+      try {
+        entries = fs.readdirSync(dirPath);
+      } catch {
+        return;
+      }
+
+      for (const entry of entries.sort()) {
+        if (entry.startsWith(".")) continue;
+        if (entry === "node_modules") continue;
+
+        const entryPath = path.join(dirPath, entry);
+        const relPath = path.join(relBase, entry);
+
+        try {
+          const stat = fs.statSync(entryPath);
+          if (stat.isDirectory()) {
+            walkDir(entryPath, relPath);
+          } else if (stat.isFile() && isTextFile(entry)) {
+            if (totalSize >= maxTotal) return;
+            const file = readFileContent(dir, relPath);
+            if (file) {
+              totalSize += file.content.length;
+              results.push(file);
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+    };
+
+    walkDir(fullPath, includePath);
+    return results;
+  }
+
+  // Simple glob: *.ext or **/*.ext at the include path level
+  // For now, if the path doesn't exist as a file or dir, skip it
+  return results;
+}
+
+/**
+ * Read a single file from the repo, with size cap.
+ */
+function readFileContent(repoRoot: string, relPath: string): ExtractedFile | null {
+  const fullPath = path.join(repoRoot, relPath);
+  if (!fs.existsSync(fullPath)) return null;
 
   try {
-    const entries = fs.readdirSync(dir).filter((e) => !e.startsWith("."));
-    return entries.sort();
+    const stat = fs.statSync(fullPath);
+    if (!stat.isFile()) return null;
+
+    // Skip binary / huge files
+    if (stat.size > 500_000) return null;
+
+    let content = fs.readFileSync(fullPath, "utf-8").trim();
+    if (content.length > MAX_FILE_SIZE) {
+      content = content.slice(0, MAX_FILE_SIZE) + "\n\n<!-- Truncated -->";
+    }
+    return { path: relPath, content };
   } catch {
     return null;
   }
@@ -209,25 +332,41 @@ export function extractStructure(url: string): string[] | null {
 export interface ResolvedReference {
   url: string;
   name: string;
-  readme: string | null;
-  structure: string[] | null;
+  files: ExtractedFile[];
 }
 
 /**
- * Resolve all references: clone/pull each, extract content.
+ * Resolve all references: clone/pull each, extract content based on include paths.
+ *
+ * - No `include`: falls back to README
+ * - With `include`: reads specified files/directories
  */
-export function resolveAllReferences(urls: string[]): ResolvedReference[] {
+export function resolveAllReferences(entries: ReferenceEntry[]): ResolvedReference[] {
   const results: ResolvedReference[] = [];
 
-  for (const url of urls) {
-    const dir = resolveReference(url);
+  for (const entry of entries) {
+    const ref = normalizeRef(entry);
+    const dir = resolveReference(ref.url);
     if (!dir) continue;
 
+    let files: ExtractedFile[] = [];
+
+    if (ref.include && ref.include.length > 0) {
+      // User specified what to include
+      for (const inc of ref.include) {
+        const collected = collectFiles(dir, inc, MAX_TOTAL_SIZE);
+        files.push(...collected);
+      }
+    } else {
+      // Default: just the README
+      const readme = extractReadme(dir, ref.url);
+      if (readme) files.push(readme);
+    }
+
     results.push({
-      url,
-      name: repoNameFromUrl(url),
-      readme: extractReadme(url),
-      structure: extractStructure(url),
+      url: ref.url,
+      name: repoNameFromUrl(ref.url),
+      files,
     });
   }
 

@@ -3,7 +3,8 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import * as yaml from "yaml";
-import { BootConfig, TeamConfig } from "../types";
+import { BootConfig, TeamConfig, ReferenceEntry } from "../types";
+import { refUrl } from "./references";
 import { log } from "./log";
 
 // ────────────────────────────────────────────────
@@ -363,7 +364,7 @@ export function mergeConfigs(
         ...(projAgent.conventions || []),
       ]),
       targets: projAgent.targets || teamAgent.targets,
-      references: dedup([
+      references: dedupRefs([
         ...(teamAgent.references || []),
         ...(projAgent.references || []),
       ]),
@@ -384,6 +385,23 @@ export function mergeConfigs(
  */
 function dedup(arr: string[]): string[] {
   return [...new Set(arr)];
+}
+
+/**
+ * Deduplicate references by URL. Project entries override team entries for the same URL.
+ */
+function dedupRefs(arr: ReferenceEntry[]): ReferenceEntry[] {
+  const seen = new Set<string>();
+  const result: ReferenceEntry[] = [];
+  // Iterate in reverse so later entries (project) win over earlier (team)
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const url = refUrl(arr[i]);
+    if (!seen.has(url)) {
+      seen.add(url);
+      result.unshift(arr[i]);
+    }
+  }
+  return result;
 }
 
 // ────────────────────────────────────────────────

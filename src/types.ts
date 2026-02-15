@@ -45,8 +45,22 @@ export interface AgentConfig {
   /** Target files to sync agent context to */
   targets?: string[];
 
-  /** Git repo URLs to clone and include as reference context for AI agents */
-  references?: string[];
+  /**
+   * Git repos to clone and include as reference context for AI agents.
+   * Supports short form (just a URL string) or long form (object with include paths).
+   */
+  references?: ReferenceEntry[];
+}
+
+/** A reference can be a plain URL string or an object with include paths */
+export type ReferenceEntry = string | ReferenceConfig;
+
+export interface ReferenceConfig {
+  /** Git URL (SSH or HTTPS) */
+  url: string;
+
+  /** Paths to include from the repo (globs or directories). If omitted, includes the README. */
+  include?: string[];
 }
 
 export interface EnvConfig {

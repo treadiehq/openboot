@@ -131,16 +131,23 @@ agent:
 
 ## References
 
-Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the README in your agent context so AI tools can answer questions about it.
+Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the content in your agent context so AI tools can answer questions about your dependencies.
 
 ```yaml
 agent:
   references:
+    # Short form: just a URL (includes the README)
     - git@github.com:Effect-TS/effect.git
-    - https://github.com/drizzle-team/drizzle-orm.git
+
+    # Long form: specify exactly what to include
+    - url: git@github.com:Effect-TS/effect.git
+      include:
+        - docs/
+        - packages/effect/README.md
+        - packages/effect/src/index.ts
 ```
 
-The referenced repos are cloned to `~/.boot/references/` and auto-refreshed. Their READMEs appear in a **References** section in the generated agent markdown.
+Without `include`, Boot pulls the README. With `include`, you control exactly what files and directories get included — docs, source, types, whatever is useful for your AI tools. Referenced repos are cloned to `~/.boot/references/` and auto-refreshed.
 
 ## Docs
 

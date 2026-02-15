@@ -486,15 +486,16 @@ export function generateAgentMarkdown(
         lines.push("");
         lines.push(`Source: ${ref.url}`);
         lines.push("");
-        if (ref.readme) {
-          lines.push(ref.readme);
-          lines.push("");
-        } else if (ref.structure) {
-          lines.push("Top-level structure:");
-          lines.push("");
-          for (const entry of ref.structure) {
-            lines.push(`- ${entry}`);
+        for (const file of ref.files) {
+          if (ref.files.length > 1) {
+            lines.push(`#### \`${file.path}\``);
+            lines.push("");
           }
+          lines.push(file.content);
+          lines.push("");
+        }
+        if (ref.files.length === 0) {
+          lines.push("*(no content extracted)*");
           lines.push("");
         }
       }

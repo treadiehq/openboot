@@ -152,6 +152,10 @@ agent:
 | `agent.description` | Project description included in AI agent context |
 | `agent.conventions` | Coding conventions for AI agents to follow |
 | `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
+| **team** | |
+| `team.url` | Git URL (SSH or HTTPS) of the team profile repo |
+| `team.required` | If true, Boot fails when the team profile can't be resolved |
+| `team.branch` | Branch to track (default: `main`) |
 
 ## What `boot init` Auto-Detects
 
@@ -431,21 +435,114 @@ For projects that use raw `docker run` (no compose):
 
 Add `.boot/` to your `.gitignore`.
 
-## Teams / company profiles (planned)
+## Team Profiles
 
-A common ask is a **team- or company-level synced profile** that applies to **the whole tool** (setup, docker, env, agent, and beyond)—not just agent context. One shared rules set that everyone uses and that can be required as the baseline.
+Share a company-wide baseline across every repo. The team profile lives in a git repo and applies to the **whole tool** — setup commands, env rules, agent conventions, everything.
 
-**Use case (from feedback):**
+### Config
 
-- **Scope:** Multiple repos, one **generic rules set** for all work. Covers things like: PR formats, don’t commit keys, run these tests, write scripts like this—general rules and conventions for everything the team does.
-- **Who maintains it:** The profile lives in a **git repo** (e.g. an internal “chell” or standards repo).
-- **How it’s applied:** **Settings with a git URL that always fetches and pulls.** When Boot runs, it resolves the team profile from that URL and merges it with the project config so the same baseline applies everywhere.
+Add a `team` section to your project's `boot.yaml`:
 
-**Possible direction:**
+```yaml
+team:
+  url: git@github.com:company/boot-standards.git
+  required: true    # optional: fail if the profile can't be resolved
+  branch: main      # optional: defaults to main
+```
 
-- **Source of truth:** A git repo URL (or path) that holds the team’s profile—e.g. a `boot.yaml` fragment or a dedicated manifest (setup, env rules, agent conventions, PR/test/script rules, etc.).
-- **Merge:** On load, Boot fetches/pulls the team profile and merges it with the project’s `boot.yaml` (team as base, project overrides).
-- **Require:** Optional enforcement so “this repo must use the company profile” (e.g. CI check or Boot refusing to run until the team profile is applied).
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `url` | yes | — | Git URL (SSH or HTTPS) of the team profile repo |
+| `required` | no | `false` | If true, Boot refuses to run when the team profile can't be resolved |
+| `branch` | no | `main` | Branch to track |
+
+### Team Profile Repo
+
+The team repo contains a `boot.yaml` (or `boot.yml` / `boot.json`) with the shared baseline. It uses the same format as a project `boot.yaml` but typically only defines the fields you want to enforce across all repos:
+
+```yaml
+# Example: company/boot-standards/boot.yaml
+
+env:
+  reject:
+    JWT_SECRET:
+      - your-super-secret-jwt-key-change-this
+    API_KEY:
+      - changeme
+
+setup:
+  - npm run lint:check
+
+agent:
+  conventions:
+    - Use conventional commits for PR titles
+    - Never commit secrets or .env files
+    - Always run tests before pushing
+    - Write scripts in TypeScript, not bash
+  targets:
+    - .cursorrules
+    - AGENTS.md
+    - CLAUDE.md
+    - .github/copilot-instructions.md
+```
+
+### Commands
+
+```bash
+boot team set <url>     # add team.url to boot.yaml + clone the profile
+boot team sync          # force-pull the latest version
+boot team check         # verify the profile is applied and up to date (CI-friendly)
+boot team status        # show what the team profile includes
+boot team remove        # remove team.url from boot.yaml + clear cache
+```
+
+Options for `boot team set`:
+
+```bash
+boot team set <url> --branch develop    # track a specific branch
+boot team set <url> --required          # enforce: fail if unavailable
+```
+
+### How Merge Works
+
+When `loadConfig()` sees a `team.url`, it clones (or pulls) the team repo to `~/.boot/teams/<hash>/` and merges the team config as the base layer under the project config.
+
+**Merge strategy (field by field):**
+
+| Field | Strategy |
+|---|---|
+| `name` | Always project |
+| `packageManager` | Project if set, else team |
+| `setup` | Team first, then project (concatenate, deduplicate) |
+| `env.file` | Project if set, else team |
+| `env.required` | Concatenate + deduplicate |
+| `env.reject` | Deep merge (both apply, project overrides per-key) |
+| `docker` | Project wins entirely (too project-specific) |
+| `apps` | Project wins entirely (too project-specific) |
+| `agent.description` | Project if set, else team |
+| `agent.conventions` | Team first, then project (concatenate, deduplicate) |
+| `agent.targets` | Project if set, else team |
+| `team` | Always project (don't inherit nested team refs) |
+
+### Caching
+
+The team repo is cloned to `~/.boot/teams/<url-hash>/` on first use. On subsequent runs, Boot auto-pulls if the cache is older than 10 minutes. Use `boot team sync` to force an immediate pull.
+
+If a pull fails (offline, auth issue), Boot uses the cached version silently. If `required: true` is set and no cached version exists, Boot fails with a clear error.
+
+### CI Usage
+
+Add `boot team check` to your CI pipeline to verify the team profile is applied:
+
+```yaml
+# GitHub Actions example
+- name: Verify team profile
+  run: boot team check
+```
+
+### Agent Context
+
+When generating agent markdown (`boot agent init` / `boot agent sync`), team conventions appear in a separate **Team Conventions** section so it's clear what comes from the team vs. the project.
 
 ## License
 

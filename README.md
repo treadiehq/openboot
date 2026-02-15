@@ -17,6 +17,7 @@ boot down        → stop everything
 boot status      → show what's running
 boot logs        → view service logs
 boot agent init  → generate AI agent context for your tools
+boot team set    → connect a shared team profile from a git repo
 ```
 
 ## Install
@@ -41,7 +42,7 @@ That's it. Boot detects your Docker services, apps, package manager, env require
 
 Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`. If those files already exist, Boot uses their content and does not overwrite them (only creates missing targets). Use `--overwrite` to replace existing files.
 
-**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev. Boot focuses on AI agent files. Editor config (.vscode ↔ .zed) and code-hub config (.github ↔ .forgejo) are a related "one source, many targets" problem we don't solve yet but planned.
+**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev. Boot focuses on AI agent files; editor or host config (e.g. .vscode → .zed, .github → .forgejo) is a related problem we don't solve but planned.
 
 ```bash
 boot agent init      # generate from your stack + config
@@ -54,13 +55,34 @@ boot agent status    # see what Boot knows about your project
 
 Your conventions live in `~/.boot/agent/` and follow you to every project. When you run `boot agent init` in a new repo, your personal patterns are included automatically.
 
-**Teams / company profiles (planned).** We’re exploring a team/company mode for the **whole tool** (setup, docker, env, agent, and general rules like PR formats, no committing keys, run these tests). Profile would live in a git repo and be applied via a git URL that Boot fetches and merges with the project config so everyone uses the same baseline.
-
 Import from another project:
 
 ```bash
 boot agent init --from ~/other-project
 ```
+
+## Team Profiles
+
+Share a company-wide baseline across every repo. The team profile lives in a git repo and covers the whole tool — setup commands, env rules, agent conventions, everything. Boot fetches it and merges it under your project config so the team baseline always applies.
+
+```bash
+boot team set git@github.com:company/boot-standards.git   # connect
+boot team sync                                             # force-pull latest
+boot team check                                            # CI: verify it's applied
+boot team status                                           # see what's merged
+boot team remove                                           # disconnect
+```
+
+In your `boot.yaml`:
+
+```yaml
+team:
+  url: git@github.com:company/boot-standards.git
+  required: true    # fail if the profile can't be resolved
+  branch: main      # optional, defaults to main
+```
+
+The team repo contains its own `boot.yaml` with the shared rules. Boot merges it as the base layer: team setup commands run first, env requirements are combined, agent conventions are included (labeled separately), and project-specific fields (apps, docker) always come from the project.
 
 ## Config
 

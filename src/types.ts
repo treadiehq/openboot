@@ -19,6 +19,20 @@ export interface BootConfig {
 
   /** AI agent context configuration */
   agent?: AgentConfig;
+
+  /** Team / company profile — shared config synced from a git repo */
+  team?: TeamConfig;
+}
+
+export interface TeamConfig {
+  /** Git URL of the team profile repo (SSH or HTTPS) */
+  url: string;
+
+  /** If true, Boot refuses to run commands when the team profile can't be resolved */
+  required?: boolean;
+
+  /** Branch to track (default: main) */
+  branch?: string;
 }
 
 export interface AgentConfig {

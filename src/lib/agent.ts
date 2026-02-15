@@ -3,7 +3,7 @@ import * as path from "path";
 import * as os from "os";
 import * as yaml from "yaml";
 import { BootConfig, AgentConfig } from "../types";
-import { detectPackageManager, findConfig, loadConfig } from "./config";
+import { detectPackageManager, findConfig, loadConfig, getTeamConfigSeparately } from "./config";
 
 // ────────────────────────────────────────────────
 // Constants
@@ -275,6 +275,8 @@ export function saveStackConventions(
 export interface GenerateOptions {
   /** Include global/personal conventions (default: true) */
   includeGlobal?: boolean;
+  /** Include team conventions as a separate labeled section (default: true) */
+  includeTeam?: boolean;
 }
 
 /**
@@ -394,14 +396,42 @@ export function generateAgentMarkdown(
     lines.push("");
   }
 
-  // ── Project conventions (from boot.yaml) ──
-  if (config.agent?.conventions && config.agent.conventions.length > 0) {
-    lines.push("## Conventions");
-    lines.push("");
-    for (const c of config.agent.conventions) {
-      lines.push(`- ${c}`);
+  // ── Team conventions (from team profile, labeled separately) ──
+  const includeTeam = options.includeTeam !== false;
+  if (includeTeam) {
+    const teamConfig = getTeamConfigSeparately(cwd);
+    if (teamConfig?.agent?.conventions && teamConfig.agent.conventions.length > 0) {
+      lines.push("## Team Conventions");
+      lines.push("");
+      for (const c of teamConfig.agent.conventions) {
+        lines.push(`- ${c}`);
+      }
+      lines.push("");
     }
-    lines.push("");
+  }
+
+  // ── Project conventions (from boot.yaml) ──
+  // When a team profile is active, the merged config includes both team + project
+  // conventions. Filter out team conventions so they aren't duplicated.
+  if (config.agent?.conventions && config.agent.conventions.length > 0) {
+    let projectConventions = config.agent.conventions;
+
+    if (includeTeam) {
+      const teamConfig = getTeamConfigSeparately(cwd);
+      if (teamConfig?.agent?.conventions) {
+        const teamSet = new Set(teamConfig.agent.conventions);
+        projectConventions = projectConventions.filter((c) => !teamSet.has(c));
+      }
+    }
+
+    if (projectConventions.length > 0) {
+      lines.push("## Conventions");
+      lines.push("");
+      for (const c of projectConventions) {
+        lines.push(`- ${c}`);
+      }
+      lines.push("");
+    }
   }
 
   // ── Global sections ──

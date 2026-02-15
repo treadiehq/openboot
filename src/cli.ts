@@ -11,6 +11,7 @@ import { clean } from "./commands/clean";
 import { logs } from "./commands/logs";
 import { dev } from "./commands/dev";
 import { registerAgentCommands } from "./commands/agent";
+import { registerTeamCommands } from "./commands/team";
 import { version, update, getCurrentVersion } from "./commands/update";
 
 const program = new Command();
@@ -157,5 +158,6 @@ program
   });
 
 registerAgentCommands(program);
+registerTeamCommands(program);
 
 program.parse();

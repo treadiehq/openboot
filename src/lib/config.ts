@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as yaml from "yaml";
 import { BootConfig } from "../types";
+import { resolveTeamProfile, mergeConfigs, loadTeamConfig, teamCacheDir } from "./team";
 
 const CONFIG_FILES = ["boot.yaml", "boot.yml", "boot.json"];
 
@@ -18,6 +19,8 @@ export function findConfig(dir: string = process.cwd()): string | null {
 
 /**
  * Load and parse the boot config.
+ * If the config has a team.url, the team profile is resolved (cloned/pulled)
+ * and merged as the base layer under the project config.
  */
 export function loadConfig(dir: string = process.cwd()): BootConfig {
   const configPath = findConfig(dir);
@@ -43,7 +46,66 @@ export function loadConfig(dir: string = process.cwd()): BootConfig {
     config.name = path.basename(dir);
   }
 
+  // ── Team profile merge ──
+  const teamConfig = config.team;
+  if (teamConfig?.url) {
+    try {
+      const resolved = resolveTeamProfile(teamConfig);
+      if (resolved) {
+        config = mergeConfigs(resolved.config, config);
+      }
+    } catch (err: any) {
+      if (teamConfig.required) {
+        throw err; // Fail hard if team profile is required
+      }
+      // Non-required: warn and continue with project-only config
+      const { log } = require("./log");
+      log.warn(`Team profile unavailable: ${err.message}`);
+    }
+  }
+
   return config;
+}
+
+/**
+ * Load the raw project config without team merge (for team commands that need
+ * to inspect the project config independently).
+ */
+export function loadProjectConfig(dir: string = process.cwd()): BootConfig {
+  const configPath = findConfig(dir);
+  if (!configPath) {
+    throw new Error("No boot.yaml found. Run `boot init` to create one.");
+  }
+
+  const raw = fs.readFileSync(configPath, "utf-8");
+
+  let config: BootConfig;
+  if (configPath.endsWith(".json")) {
+    config = JSON.parse(raw);
+  } else {
+    config = yaml.parse(raw);
+  }
+
+  if (!config || typeof config !== "object") {
+    config = {} as BootConfig;
+  }
+
+  if (!config.name) {
+    config.name = path.basename(dir);
+  }
+
+  return config;
+}
+
+/**
+ * Get the team config separately (for agent markdown labeling).
+ * Returns null if no team profile is configured or cached.
+ */
+export function getTeamConfigSeparately(dir: string = process.cwd()): BootConfig | null {
+  const projectConfig = loadProjectConfig(dir);
+  if (!projectConfig.team?.url) return null;
+
+  return loadTeamConfig(projectConfig.team.url);
 }
 
 /**

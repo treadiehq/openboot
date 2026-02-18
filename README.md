@@ -17,6 +17,8 @@ boot down        → stop everything
 boot status      → show what's running
 boot logs        → view service logs
 boot agent init  → generate AI agent context for your tools
+boot editor init → generate editor config (.vscode, .zed)
+boot hub init    → generate CI workflows (.github, .forgejo)
 boot team set    → connect a shared team profile from a git repo
 ```
 
@@ -42,7 +44,7 @@ That's it. Boot detects your Docker services, apps, package manager, env require
 
 Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`. If those files already exist, Boot uses their content and does not overwrite them (only creates missing targets). Use `--overwrite` to replace existing files.
 
-**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev. Boot focuses on AI agent files; editor or host config (e.g. .vscode → .zed, .github → .forgejo) is a related problem we don't solve but planned.
+**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev.
 
 ```bash
 boot agent init      # generate from your stack + config
@@ -83,6 +85,73 @@ team:
 ```
 
 The team repo contains its own `boot.yaml` with the shared rules. Boot merges it as the base layer: team setup commands run first, env requirements are combined, agent conventions are included (labeled separately), and project-specific fields (apps, docker) always come from the project.
+
+## Editor Config
+
+Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`.
+
+```bash
+boot editor init     # detect tasks from package.json, write to .vscode/ and .zed/
+boot editor sync     # regenerate after editing boot.yaml
+boot editor check    # verify targets are in sync (CI-friendly)
+```
+
+In your `boot.yaml`:
+
+```yaml
+editor:
+  tasks:
+    - name: dev
+      command: pnpm dev
+    - name: test
+      command: pnpm test
+      group: test
+    - name: lint
+      command: pnpm lint
+  targets:
+    - .vscode
+    - .zed
+```
+
+## Hub Config
+
+Boot syncs CI workflows and PR templates from one source to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Define your PR template once, generate `.github/PULL_REQUEST_TEMPLATE.md` and `.forgejo/PULL_REQUEST_TEMPLATE.md`.
+
+```bash
+boot hub init        # detect CI steps from package.json, write workflows + PR template
+boot hub sync        # regenerate after editing boot.yaml
+boot hub check       # verify targets are in sync (CI-friendly)
+```
+
+In your `boot.yaml`:
+
+```yaml
+hub:
+  ci:
+    on: [push, pull_request]
+    node: "18"
+    steps:
+      - name: Install
+        run: pnpm install
+      - name: Lint
+        run: pnpm lint
+      - name: Test
+        run: pnpm test
+  prTemplate:
+    sections:
+      - name: Summary
+        prompt: "What changed and why?"
+      - name: Prompt context
+        prompt: "Key prompts or decisions from AI conversations."
+        optional: true
+      - name: Test plan
+        prompt: "How was this tested?"
+  targets:
+    - .github
+    - .forgejo
+```
+
+The `prTemplate` section generates a PR template with the sections you define. Each section becomes a markdown heading with the `prompt` as an HTML comment hint. Sections marked `optional: true` get "(optional)" appended to the heading. Boot includes a default PR template with Summary, Prompt context, and Test plan sections when you run `boot hub init`.
 
 ## Config
 
@@ -127,6 +196,39 @@ agent:
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
+
+editor:
+  tasks:
+    - name: dev
+      command: pnpm dev
+    - name: test
+      command: pnpm test
+      group: test
+  targets:
+    - .vscode
+    - .zed
+
+hub:
+  ci:
+    on: [push, pull_request]
+    node: "18"
+    steps:
+      - name: Install
+        run: pnpm install
+      - name: Test
+        run: pnpm test
+  prTemplate:
+    sections:
+      - name: Summary
+        prompt: "What changed and why?"
+      - name: Prompt context
+        prompt: "Key prompts or decisions from AI conversations."
+        optional: true
+      - name: Test plan
+        prompt: "How was this tested?"
+  targets:
+    - .github
+    - .forgejo
 ```
 
 ## References

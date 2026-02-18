@@ -20,6 +20,12 @@ export interface BootConfig {
   /** AI agent context configuration */
   agent?: AgentConfig;
 
+  /** Editor config sync (.vscode, .zed) */
+  editor?: EditorConfig;
+
+  /** Code hub config sync (.github, .forgejo) */
+  hub?: HubConfig;
+
   /** Team / company profile — shared config synced from a git repo */
   team?: TeamConfig;
 }
@@ -120,6 +126,74 @@ export interface ContainerConfig {
 
   /** Seconds to wait for readiness (default: 30) */
   timeout?: number;
+}
+
+export interface EditorConfig {
+  /** Tasks to sync to editor-specific formats */
+  tasks?: EditorTask[];
+
+  /** Editor directories to write to (default: [".vscode", ".zed"]) */
+  targets?: string[];
+}
+
+export interface EditorTask {
+  /** Task label shown in the editor */
+  name: string;
+
+  /** Shell command to run */
+  command: string;
+
+  /** Working directory relative to project root */
+  cwd?: string;
+
+  /** Task group: "build" or "test" */
+  group?: "build" | "test";
+}
+
+export interface HubConfig {
+  /** CI workflow configuration */
+  ci?: HubCIConfig;
+
+  /** PR template configuration */
+  prTemplate?: HubPRTemplateConfig;
+
+  /** Hub directories to write to (default: [".github", ".forgejo"]) */
+  targets?: string[];
+}
+
+export interface HubPRTemplateConfig {
+  /** Sections to include in the PR template */
+  sections?: HubPRTemplateSection[];
+}
+
+export interface HubPRTemplateSection {
+  /** Section heading */
+  name: string;
+
+  /** Hint shown as an HTML comment under the heading */
+  prompt?: string;
+
+  /** If true, the section heading includes "(optional)" */
+  optional?: boolean;
+}
+
+export interface HubCIConfig {
+  /** Trigger events (default: ["push", "pull_request"]) */
+  on?: string[];
+
+  /** Node.js version (auto-detected from engines/.nvmrc if omitted) */
+  node?: string;
+
+  /** CI steps to run after checkout and setup */
+  steps?: HubCIStep[];
+}
+
+export interface HubCIStep {
+  /** Step display name */
+  name: string;
+
+  /** Shell command to run */
+  run: string;
 }
 
 export interface AppConfig {

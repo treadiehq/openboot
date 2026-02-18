@@ -20,6 +20,8 @@ boot status      → show what's running
 boot logs        → view service logs (boot logs api -f)
 boot clean       → nuke deps, caches, build outputs for a fresh start
 boot agent init  → generate AI agent context (.cursorrules, AGENTS.md, CLAUDE.md)
+boot editor init → generate editor config (.vscode/tasks.json, .zed/tasks.json)
+boot hub init    → generate CI workflows (.github/workflows, .forgejo/workflows)
 ```
 
 ## Install
@@ -114,6 +116,34 @@ agent:
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
+
+editor:
+  tasks:
+    - name: dev
+      command: pnpm dev
+    - name: test
+      command: pnpm test
+      group: test
+    - name: lint
+      command: pnpm lint
+  targets:
+    - .vscode
+    - .zed
+
+hub:
+  ci:
+    on: [push, pull_request]
+    node: "18"
+    steps:
+      - name: Install
+        run: pnpm install
+      - name: Lint
+        run: pnpm lint
+      - name: Test
+        run: pnpm test
+  targets:
+    - .github
+    - .forgejo
 ```
 
 ### Config Reference
@@ -153,6 +183,18 @@ agent:
 | `agent.conventions` | Coding conventions for AI agents to follow |
 | `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
 | `agent.references` | Git repos to clone as AI context. String (URL) or object (`url` + `include` paths) |
+| **editor** | |
+| `editor.tasks[].name` | Task label shown in the editor |
+| `editor.tasks[].command` | Shell command to run |
+| `editor.tasks[].cwd` | Working directory relative to project root |
+| `editor.tasks[].group` | Task group: `"build"` or `"test"` |
+| `editor.targets` | Editor directories to write to (default: `[".vscode", ".zed"]`) |
+| **hub** | |
+| `hub.ci.on` | Trigger events (default: `["push", "pull_request"]`) |
+| `hub.ci.node` | Node.js version (auto-detected from `.nvmrc`/engines if omitted) |
+| `hub.ci.steps[].name` | CI step display name |
+| `hub.ci.steps[].run` | Shell command to run |
+| `hub.targets` | Hub directories to write to (default: `[".github", ".forgejo"]`) |
 | **team** | |
 | `team.url` | Git URL (SSH or HTTPS) of the team profile repo |
 | `team.required` | If true, Boot fails when the team profile can't be resolved |
@@ -167,6 +209,8 @@ agent:
 - **Monorepo apps** — scans `apps/*/package.json` for dev scripts
 - **Sub-directory apps** — detects `dashboard/`, `frontend/`, `backend/`, `server/`, etc.
 - **Single-app projects** — detects `dev` or `start` scripts in root `package.json`
+- **Editor tasks** — detects common scripts (`dev`, `build`, `test`, `lint`, `start`, `format`, `typecheck`) from `package.json`
+- **Hub CI steps** — detects CI-relevant scripts (`lint`, `test`, `build`, `typecheck`) from `package.json`; detects Node version from `.nvmrc`, `.node-version`, or `engines`
 - **Python / uv** — detects `pyproject.toml` or `uv.lock` and adds `uv sync` to setup (or `pip install -e .` when only `requirements.txt` is present)
 - **Build-before-run** — if `dashboard/`, `frontend/`, `web/`, `client/`, or `admin/` has a `build` script, adds `cd <dir> && <pm> install && <pm> run build` to setup so the main app can assume the bundle is built
 - **Python main app** — when `pyproject.toml` has `[project.scripts]` (or uses project name), adds a primary app with `uv run <script>` and a known port when applicable (e.g. exo → 52415)
@@ -465,6 +509,172 @@ For projects that use raw `docker run` (no compose):
 - Ports are freed before starting if occupied
 
 Add `.boot/` to your `.gitignore`.
+
+## Editor Config
+
+Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`. One source, many targets — same philosophy as agent sync.
+
+### Config
+
+Add an `editor` section to `boot.yaml`:
+
+```yaml
+editor:
+  tasks:
+    - name: dev
+      command: pnpm dev
+      cwd: apps/web          # optional, relative to project root
+      group: build            # optional: "build" or "test"
+    - name: test
+      command: pnpm test
+      group: test
+    - name: lint
+      command: pnpm lint
+  targets:                    # default: [".vscode", ".zed"]
+    - .vscode
+    - .zed
+```
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `tasks[].name` | yes | — | Task label shown in the editor |
+| `tasks[].command` | yes | — | Shell command to run |
+| `tasks[].cwd` | no | project root | Working directory relative to project root |
+| `tasks[].group` | no | — | `"build"` or `"test"` (maps to editor-specific grouping) |
+| `targets` | no | `[".vscode", ".zed"]` | Editor directories to write to |
+
+### Commands
+
+```bash
+boot editor init               # detect tasks from package.json, write to targets
+boot editor sync               # regenerate after editing boot.yaml
+boot editor check              # verify targets are in sync (CI-friendly)
+```
+
+Options:
+
+```bash
+boot editor init --overwrite   # overwrite existing editor config files
+boot editor sync --overwrite   # overwrite existing editor config files
+```
+
+### Generated Output
+
+**VS Code** — `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dev",
+      "type": "shell",
+      "command": "pnpm dev",
+      "options": { "cwd": "${workspaceFolder}/apps/web" },
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}
+```
+
+**Zed** — `.zed/tasks.json`:
+
+```json
+[
+  {
+    "label": "dev",
+    "command": "pnpm dev",
+    "cwd": "apps/web",
+    "tags": ["build"]
+  }
+]
+```
+
+### Auto-Detection
+
+`boot editor init` scans `package.json` for common scripts (`dev`, `build`, `test`, `lint`, `start`, `format`, `typecheck`) and generates a task for each. It also creates per-app start tasks from `boot.yaml` apps.
+
+## Hub Config
+
+Boot syncs CI workflows from one source in `boot.yaml` to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Forgejo Actions uses GitHub Actions-compatible syntax, so the workflow content is the same — only the directory differs.
+
+### Config
+
+Add a `hub` section to `boot.yaml`:
+
+```yaml
+hub:
+  ci:
+    on: [push, pull_request]   # default: [push, pull_request]
+    node: "18"                 # auto-detected from .nvmrc/engines if omitted
+    steps:
+      - name: Install
+        run: pnpm install
+      - name: Lint
+        run: pnpm lint
+      - name: Test
+        run: pnpm test
+  targets:                     # default: [".github", ".forgejo"]
+    - .github
+    - .forgejo
+```
+
+| Field | Required | Default | Description |
+|---|---|---|---|
+| `ci.on` | no | `["push", "pull_request"]` | Trigger events |
+| `ci.node` | no | auto-detected or `"18"` | Node.js version for `actions/setup-node` |
+| `ci.steps[].name` | yes | — | Step display name |
+| `ci.steps[].run` | yes | — | Shell command to run |
+| `targets` | no | `[".github", ".forgejo"]` | Hub directories to write to |
+
+### Commands
+
+```bash
+boot hub init                  # detect CI steps from package.json, write workflows
+boot hub sync                  # regenerate after editing boot.yaml
+boot hub check                 # verify targets are in sync (CI-friendly)
+```
+
+Options:
+
+```bash
+boot hub init --overwrite      # overwrite existing workflow files
+boot hub sync --overwrite      # overwrite existing workflow files
+```
+
+### Generated Output
+
+Both `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml` get the same content:
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install
+        run: pnpm install
+      - name: Lint
+        run: pnpm lint
+      - name: Test
+        run: pnpm test
+```
+
+For pnpm projects, Boot automatically adds the `pnpm/action-setup@v4` step.
+
+### Auto-Detection
+
+`boot hub init` scans `package.json` for CI-relevant scripts (`lint`, `test`, `build`, `typecheck`) and generates a step for each. Node version is detected from `.nvmrc`, `.node-version`, or `engines.node` in `package.json`.
 
 ## Team Profiles
 

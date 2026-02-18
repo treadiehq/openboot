@@ -15,6 +15,8 @@ import {
   ContainerConfig,
 } from "../types";
 import { detectAgentFiles, DEFAULT_TARGETS } from "../lib/agent";
+import { detectEditorTasks, DEFAULT_EDITOR_TARGETS } from "../lib/editor";
+import { detectCISteps, detectNodeVersion, DEFAULT_HUB_TARGETS, DEFAULT_PR_TEMPLATE_SECTIONS } from "../lib/hub";
 
 /**
  * `boot init` — auto-detect project structure and create boot.yaml.
@@ -284,6 +286,32 @@ export async function init(): Promise<void> {
     targets: DEFAULT_TARGETS,
   };
 
+  // --- Detect editor tasks ---
+  const editorTasks = detectEditorTasks(cwd, config);
+  if (editorTasks.length > 0) {
+    config.editor = {
+      tasks: editorTasks,
+      targets: DEFAULT_EDITOR_TARGETS,
+    };
+    log.success(`Detected ${editorTasks.length} editor task(s)`);
+  }
+
+  // --- Detect hub CI steps ---
+  const ciSteps = detectCISteps(cwd, config);
+  if (ciSteps.length > 0) {
+    const nodeVersion = detectNodeVersion(cwd) || "18";
+    config.hub = {
+      ci: {
+        on: ["push", "pull_request"],
+        node: nodeVersion,
+        steps: ciSteps,
+      },
+      prTemplate: { sections: DEFAULT_PR_TEMPLATE_SECTIONS },
+      targets: DEFAULT_HUB_TARGETS,
+    };
+    log.success(`Detected ${ciSteps.length} CI step(s)`);
+  }
+
   // --- Write config ---
   const yamlStr = yaml.stringify(config, {
     indent: 2,
@@ -299,7 +327,9 @@ export async function init(): Promise<void> {
   log.step("  1. Review and edit boot.yaml");
   log.step("  2. Run: boot setup");
   log.step("  3. Run: boot up");
-  log.step("  4. Run: boot agent init  (generate AI agent context)");
+  log.step("  4. Run: boot agent init   (generate AI agent context)");
+  log.step("  5. Run: boot editor init  (generate editor config)");
+  log.step("  6. Run: boot hub init     (generate CI workflows)");
   log.blank();
 }
 

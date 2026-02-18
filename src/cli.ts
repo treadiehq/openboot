@@ -11,6 +11,8 @@ import { clean } from "./commands/clean";
 import { logs } from "./commands/logs";
 import { dev } from "./commands/dev";
 import { registerAgentCommands } from "./commands/agent";
+import { registerEditorCommands } from "./commands/editor";
+import { registerHubCommands } from "./commands/hub";
 import { registerTeamCommands } from "./commands/team";
 import { version, update, getCurrentVersion } from "./commands/update";
 
@@ -158,6 +160,8 @@ program
   });
 
 registerAgentCommands(program);
+registerEditorCommands(program);
+registerHubCommands(program);
 registerTeamCommands(program);
 
 program.parse();

@@ -164,13 +164,16 @@ function smartPrismaSetup(): void {
     } catch {
       log.warn("migrate deploy failed — trying db push...");
       try {
-        execSync(`${runCmd} prisma db push`, {
+        execSync(`${runCmd} prisma db push --accept-data-loss`, {
           cwd: appDir,
           stdio: "inherit",
         });
         log.success("Database schema pushed (fallback)");
       } catch {
         log.warn("Database schema push also failed — continuing");
+        log.step(
+          "If the DB already has schema but no migrations, see: https://pris.ly/d/migrate-baseline"
+        );
       }
     }
   }

@@ -157,13 +157,14 @@ export async function init(): Promise<void> {
       const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
       const hasDevScript = !!pkg.scripts?.dev;
 
+      const appPath = path.join(cwd, "apps", dir);
       const app: AppConfig = {
         name: dir,
         path: `apps/${dir}`,
         command: devCommand(pm, hasDevScript),
       };
 
-      const port = guessPort(dir);
+      const port = readPortFromEnv(appPath) || guessPort(dir);
       if (port) app.port = port;
 
       config.apps!.push(app);
@@ -201,7 +202,7 @@ export async function init(): Promise<void> {
           command: devCommand(pm, hasDevScript),
         };
 
-        const port = guessPort(dir);
+        const port = readPortFromEnv(fullPath) || guessPort(dir);
         if (port) app.port = port;
 
         config.apps!.push(app);

@@ -104,10 +104,18 @@ export function startApp(app: AppConfig, projectRoot: string): void {
   // Open log file
   const logFd = fs.openSync(lf, "a");
 
+  // Ensure app listens on the port boot displays (many frameworks use PORT)
+  const env: NodeJS.ProcessEnv = { ...process.env, ...(app.env || {}) };
+  if (app.port !== undefined) {
+    env.PORT = String(app.port);
+    // Vite dev server
+    env.VITE_PORT = String(app.port);
+  }
+
   // Spawn detached process
   const child = spawn(app.command, [], {
     cwd,
-    env: { ...process.env, ...(app.env || {}) },
+    env,
     stdio: ["ignore", logFd, logFd],
     detached: true,
     shell: true,

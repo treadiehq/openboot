@@ -11,7 +11,7 @@ Boot fixes both. One config file, one command, everything starts, and your AI ag
 ```
 boot init        → creates boot.yaml (auto-detects your stack)
 boot setup       → one-time setup (deps, DB, migrations)
-boot up          → start everything (Docker + apps)
+boot up          → start everything (Docker + apps + proxy)
 boot dev         → interactive dev mode with live logs
 boot down        → stop everything
 boot status      → show what's running
@@ -36,9 +36,11 @@ npm install -g openboot
 boot init        # auto-detects your stack, creates boot.yaml
 boot setup       # install deps, start DB, run migrations
 boot dev         # start everything with live logs (Ctrl+C stops all)
+# → api: http://api.localhost:1355
+# → web: http://web.localhost:1355
 ```
 
-That's it. Boot detects your Docker services, apps, package manager, env requirements, and generates the config. Boot doesn't replace your scripts, it runs them in the right order, together with Docker and env checks.
+That's it. Boot detects your Docker services, apps, package manager, env requirements, and generates the config. Every app gets a stable `.localhost` URL — no more remembering port numbers. Boot doesn't replace your scripts, it runs them in the right order, together with Docker and env checks.
 
 ## AI Agent Context
 

@@ -526,6 +526,27 @@ Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ign
 
 This works for both explicit ports and `port: auto`. No config needed — Boot handles the detection and injection transparently.
 
+### `.localhost` Proxy
+
+Boot runs a reverse proxy on port 1355 that gives every app a stable, named URL:
+
+```
+api  → http://api.localhost:1355
+web  → http://web.localhost:1355
+docs → http://docs.localhost:1355
+```
+
+The proxy starts automatically with `boot dev` and `boot up`. No config, no `/etc/hosts` editing — `*.localhost` resolves to `127.0.0.1` in all modern browsers per RFC 6761.
+
+**Why this matters:**
+- URLs survive restarts — auto-assigned ports change, names don't
+- One port to remember across all projects (1355)
+- Cookies and localStorage isolate per app name (no cross-app bleed)
+- AI agents can use stable URLs instead of guessing ports
+- Visit `http://localhost:1355` for a status page listing all registered apps
+
+The proxy handles HTTP and WebSocket upgrades (HMR, live-reload) transparently. If port 1355 is already in use, Boot falls back to showing direct `localhost:<port>` URLs.
+
 Add `.boot/` to your `.gitignore`.
 
 ## Editor Config

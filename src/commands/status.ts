@@ -5,6 +5,7 @@ import { getDockerStatus } from "../lib/docker";
 import { getAppStatus, logFile } from "../lib/process";
 import { isPortInUse } from "../lib/ports";
 import { log } from "../lib/log";
+import { isProxyRunning, PROXY_PORT } from "../lib/proxy";
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -19,8 +20,10 @@ export async function status(): Promise<void> {
 
   log.header(`${config.name} — status`);
 
+  const proxyUp = isProxyRunning() || isPortInUse(PROXY_PORT);
+
   const rows: string[][] = [];
-  rows.push(["SERVICE", "STATUS", "PORT", "PID", "PROCESS", "HEALTH", "LOG"]);
+  rows.push(["SERVICE", "STATUS", "URL", "PID", "PROCESS", "HEALTH", "LOG"]);
 
   // Docker services / containers
   if (config.docker) {
@@ -83,7 +86,11 @@ export async function status(): Promise<void> {
   if (config.apps) {
     for (const app of config.apps) {
       const { running, pid, portPid, resolvedPort } = getAppStatus(app);
-      const portStr = resolvedPort ? String(resolvedPort) : "—";
+      const portStr = resolvedPort
+        ? proxyUp
+          ? `${app.name}.localhost:${PROXY_PORT}`
+          : String(resolvedPort)
+        : "—";
       const lf = logFile(app.name);
       const hasLog = fs.existsSync(lf);
 

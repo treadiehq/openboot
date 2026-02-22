@@ -6,6 +6,7 @@ import { waitForHealth } from "../lib/health";
 import { log } from "../lib/log";
 import { checkPrerequisites } from "../lib/prereqs";
 import { tailAllLogs } from "../lib/tail";
+import { startProxy, stopProxy, PROXY_PORT } from "../lib/proxy";
 
 /**
  * `boot dev` — interactive development mode.
@@ -46,6 +47,9 @@ export async function dev(): Promise<void> {
       stopDocker(config);
     }
 
+    // Stop proxy
+    stopProxy();
+
     log.blank();
     log.success(`${config.name} stopped`);
     log.blank();
@@ -57,6 +61,12 @@ export async function dev(): Promise<void> {
 
   log.header(`${config.name} — dev mode`);
   log.blank();
+
+  // Start reverse proxy
+  const proxyOk = startProxy();
+  if (proxyOk) {
+    log.success(`Proxy listening on http://localhost:${PROXY_PORT}`);
+  }
 
   // Start Docker services
   if (config.docker) {
@@ -91,7 +101,9 @@ export async function dev(): Promise<void> {
   if (config.apps) {
     for (const app of config.apps) {
       const port = typeof app.port === "number" ? app.port : null;
-      if (port) {
+      if (port && proxyOk) {
+        log.step(`${app.name}: http://${app.name}.localhost:${PROXY_PORT}`);
+      } else if (port) {
         log.step(`${app.name}: http://localhost:${port}`);
       } else {
         log.step(`${app.name}: started`);

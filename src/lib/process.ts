@@ -11,6 +11,7 @@ import {
   getResolvedPort,
   clearResolvedPort,
 } from "./ports";
+import { writeRoute, removeRoute } from "./proxy";
 
 const BOOT_DIR = ".boot";
 const PIDS_DIR = path.join(BOOT_DIR, "pids");
@@ -82,13 +83,19 @@ export function getPortPid(port: number): number | null {
 }
 
 // Frameworks that ignore the PORT env var and need explicit --port flags.
-const FRAMEWORK_PORT_FLAGS: Record<string, { portFlag: string; hostFlag?: string }> = {
-  vite: { portFlag: "--port", hostFlag: "--host" },
+// strictPort prevents the framework from silently rebinding to a different
+// port if the assigned one is momentarily contested (race condition).
+const FRAMEWORK_PORT_FLAGS: Record<string, {
+  portFlag: string;
+  hostFlag?: string;
+  strictPort?: boolean;
+}> = {
+  vite: { portFlag: "--port", hostFlag: "--host", strictPort: true },
   astro: { portFlag: "--port", hostFlag: "--host" },
   "ng serve": { portFlag: "--port" },
   "webpack serve": { portFlag: "--port" },
   "webpack-dev-server": { portFlag: "--port" },
-  "react-router dev": { portFlag: "--port" },
+  "react-router": { portFlag: "--port", strictPort: true },
 };
 
 /**
@@ -120,7 +127,7 @@ function resolveScriptCommand(command: string, cwd: string): string | null {
 function detectFramework(
   command: string,
   cwd: string
-): { portFlag: string; hostFlag?: string } | null {
+): { portFlag: string; hostFlag?: string; strictPort?: boolean } | null {
   const candidates = [command, resolveScriptCommand(command, cwd) ?? ""];
 
   for (const cmd of candidates) {
@@ -143,8 +150,11 @@ function injectPortFlags(command: string, port: number, cwd: string): string {
   if (command.includes(framework.portFlag)) return command;
 
   let flags = `${framework.portFlag} ${port}`;
+  if (framework.strictPort && !command.includes("--strictPort")) {
+    flags += " --strictPort";
+  }
   if (framework.hostFlag && !command.includes(framework.hostFlag)) {
-    flags += ` ${framework.hostFlag}`;
+    flags += ` ${framework.hostFlag} 127.0.0.1`;
   }
 
   if (/^npm\s+run\b/.test(command)) {
@@ -209,6 +219,8 @@ export function startApp(app: AppConfig, projectRoot: string): void {
   const env: NodeJS.ProcessEnv = { ...process.env, ...(app.env || {}) };
   if (resolvedPort !== undefined) {
     env.PORT = String(resolvedPort);
+    env.HOST = "127.0.0.1";
+    env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = ".localhost";
   }
 
   // Inject --port/--host for frameworks that ignore PORT env var
@@ -231,6 +243,9 @@ export function startApp(app: AppConfig, projectRoot: string): void {
 
   if (child.pid) {
     fs.writeFileSync(pf, String(child.pid));
+    if (resolvedPort !== undefined) {
+      writeRoute(app.name, resolvedPort, child.pid);
+    }
     log.success(`${app.name} started (PID: ${child.pid})`);
   } else {
     log.error(`Failed to start ${app.name}`);
@@ -322,6 +337,7 @@ export function stopApp(app: AppConfig | string): void {
   }
 
   clearResolvedPort(appName);
+  removeRoute(appName);
 
   if (stopped) {
     log.success(`${appName} stopped`);

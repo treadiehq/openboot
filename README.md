@@ -178,7 +178,7 @@ apps:
   - name: web
     path: apps/web
     command: pnpm dev
-    port: 3000
+    port: auto          # assigns a free port (4000–4999) at startup
 
 env:
   required:

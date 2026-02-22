@@ -102,8 +102,7 @@ apps:
   - name: web
     path: apps/web
     command: pnpm dev
-    port: 3000
-    health: http://localhost:3000
+    port: auto          # assigns a free port (4000–4999) at startup
 
 agent:
   description: "E-commerce platform with Next.js frontend and Express API"
@@ -175,7 +174,7 @@ hub:
 | `apps[].name` | App name (used for logs and PID tracking) |
 | `apps[].path` | Working directory relative to project root |
 | `apps[].command` | Command to start the app |
-| `apps[].port` | Port the app listens on |
+| `apps[].port` | Port the app listens on. Set to `"auto"` to assign a free port dynamically (range 4000–4999) |
 | `apps[].health` | URL to poll for health check |
 | `apps[].env` | Extra environment variables |
 | **agent** | |
@@ -507,6 +506,25 @@ For projects that use raw `docker run` (no compose):
 - `boot down` kills the full process tree (not just the parent)
 - Falls back to `pkill -f` for orphan process cleanup
 - Ports are freed before starting if occupied
+
+### Auto Port Assignment
+
+Set `port: auto` in `boot.yaml` and Boot picks a free port in the 4000–4999 range at startup:
+
+```yaml
+apps:
+  - name: web
+    command: pnpm dev
+    port: auto
+```
+
+The resolved port is persisted in `.boot/ports/` so `boot status` and `boot down` can reference it. The `PORT` environment variable is set automatically for the child process.
+
+### Framework Port Injection
+
+Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ignore the `PORT` environment variable. When Boot detects one of these in your app command — either directly or by resolving the underlying script from `package.json` — it automatically appends the correct `--port` (and `--host` where needed) flags so the app listens on the port Boot assigned.
+
+This works for both explicit ports and `port: auto`. No config needed — Boot handles the detection and injection transparently.
 
 Add `.boot/` to your `.gitignore`.
 

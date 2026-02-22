@@ -1,4 +1,8 @@
 import { execFileSync } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
+
+const PORTS_DIR = path.join(".boot", "ports");
 
 /**
  * Check if a port is currently in use (local LISTEN only).
@@ -41,6 +45,55 @@ export function killPort(port: number): void {
     }
   } catch {
     // nothing on that port, or already dead
+  }
+}
+
+/**
+ * Find an available port in a given range.
+ * Tries random ports first for speed, then falls back to a sequential scan.
+ */
+export function findFreePort(min = 4000, max = 4999): number {
+  const range = max - min + 1;
+  const attempts = Math.min(50, range);
+
+  for (let i = 0; i < attempts; i++) {
+    const port = min + Math.floor(Math.random() * range);
+    if (!isPortInUse(port)) return port;
+  }
+
+  for (let port = min; port <= max; port++) {
+    if (!isPortInUse(port)) return port;
+  }
+
+  throw new Error(`No free port found in range ${min}–${max}`);
+}
+
+/**
+ * Persist the resolved port for an app so status/stop can read it later.
+ */
+export function saveResolvedPort(appName: string, port: number): void {
+  fs.mkdirSync(PORTS_DIR, { recursive: true });
+  fs.writeFileSync(path.join(PORTS_DIR, `${appName}.port`), String(port));
+}
+
+/**
+ * Read the last resolved port for an app (or null if not found).
+ */
+export function getResolvedPort(appName: string): number | null {
+  const portFile = path.join(PORTS_DIR, `${appName}.port`);
+  if (!fs.existsSync(portFile)) return null;
+  const val = parseInt(fs.readFileSync(portFile, "utf-8").trim(), 10);
+  return isNaN(val) ? null : val;
+}
+
+/**
+ * Remove the saved port file for an app (called on stop).
+ */
+export function clearResolvedPort(appName: string): void {
+  try {
+    fs.unlinkSync(path.join(PORTS_DIR, `${appName}.port`));
+  } catch {
+    // already gone
   }
 }
 

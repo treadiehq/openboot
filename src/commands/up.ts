@@ -108,8 +108,9 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
 
   if (config.apps) {
     for (const app of config.apps) {
-      if (app.port) {
-        log.step(`${app.name}: http://localhost:${app.port}`);
+      const port = typeof app.port === "number" ? app.port : null;
+      if (port) {
+        log.step(`${app.name}: http://localhost:${port}`);
       } else {
         log.step(`${app.name}: started`);
       }

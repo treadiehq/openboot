@@ -82,8 +82,8 @@ export async function status(): Promise<void> {
   // App processes
   if (config.apps) {
     for (const app of config.apps) {
-      const { running, pid, portPid } = getAppStatus(app);
-      const portStr = app.port ? String(app.port) : "—";
+      const { running, pid, portPid, resolvedPort } = getAppStatus(app);
+      const portStr = resolvedPort ? String(resolvedPort) : "—";
       const lf = logFile(app.name);
       const hasLog = fs.existsSync(lf);
 
@@ -91,7 +91,7 @@ export async function status(): Promise<void> {
       let statusStr: string;
       if (running) {
         statusStr = `${GREEN}running${RESET}`;
-      } else if (app.port && isPortInUse(app.port)) {
+      } else if (resolvedPort && isPortInUse(resolvedPort)) {
         statusStr = `${YELLOW}port in use${RESET}`;
       } else {
         statusStr = `${RED}stopped${RESET}`;
@@ -109,9 +109,8 @@ export async function status(): Promise<void> {
         healthStr = checkHealth(app.health)
           ? `${GREEN}ok${RESET}`
           : `${RED}failing${RESET}`;
-      } else if (running && app.port) {
-        // No explicit health URL — just check if port responds
-        healthStr = checkHealth(`http://localhost:${app.port}`)
+      } else if (running && resolvedPort) {
+        healthStr = checkHealth(`http://localhost:${resolvedPort}`)
           ? `${GREEN}ok${RESET}`
           : `${YELLOW}no response${RESET}`;
       }

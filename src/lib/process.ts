@@ -3,7 +3,14 @@ import * as fs from "fs";
 import * as path from "path";
 import { AppConfig } from "../types";
 import { log } from "./log";
-import { isPortInUse, killPort } from "./ports";
+import {
+  isPortInUse,
+  killPort,
+  findFreePort,
+  saveResolvedPort,
+  getResolvedPort,
+  clearResolvedPort,
+} from "./ports";
 
 const BOOT_DIR = ".boot";
 const PIDS_DIR = path.join(BOOT_DIR, "pids");
@@ -74,8 +81,87 @@ export function getPortPid(port: number): number | null {
   }
 }
 
+// Frameworks that ignore the PORT env var and need explicit --port flags.
+const FRAMEWORK_PORT_FLAGS: Record<string, { portFlag: string; hostFlag?: string }> = {
+  vite: { portFlag: "--port", hostFlag: "--host" },
+  astro: { portFlag: "--port", hostFlag: "--host" },
+  "ng serve": { portFlag: "--port" },
+  "webpack serve": { portFlag: "--port" },
+  "webpack-dev-server": { portFlag: "--port" },
+  "react-router dev": { portFlag: "--port" },
+};
+
+/**
+ * Resolve a package-manager wrapper command (e.g. "pnpm dev") to the
+ * underlying script content from package.json.
+ */
+function resolveScriptCommand(command: string, cwd: string): string | null {
+  const match =
+    command.match(/^pnpm\s+(?:run\s+)?(\S+)/) ||
+    command.match(/^npm\s+run\s+(\S+)/) ||
+    command.match(/^yarn\s+(?:run\s+)?(\S+)/);
+  if (!match) return null;
+
+  const pkgPath = path.join(cwd, "package.json");
+  if (!fs.existsSync(pkgPath)) return null;
+
+  try {
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+    return pkg.scripts?.[match[1]] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Detect if a command (or its underlying script) uses a framework that
+ * ignores the PORT env var.
+ */
+function detectFramework(
+  command: string,
+  cwd: string
+): { portFlag: string; hostFlag?: string } | null {
+  const candidates = [command, resolveScriptCommand(command, cwd) ?? ""];
+
+  for (const cmd of candidates) {
+    for (const [key, flags] of Object.entries(FRAMEWORK_PORT_FLAGS)) {
+      if (cmd.includes(key)) return flags;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Append --port (and optionally --host) to a command if the framework
+ * needs it.  Respects the correct arg-passing syntax per package manager.
+ */
+function injectPortFlags(command: string, port: number, cwd: string): string {
+  const framework = detectFramework(command, cwd);
+  if (!framework) return command;
+
+  if (command.includes(framework.portFlag)) return command;
+
+  let flags = `${framework.portFlag} ${port}`;
+  if (framework.hostFlag && !command.includes(framework.hostFlag)) {
+    flags += ` ${framework.hostFlag}`;
+  }
+
+  if (/^npm\s+run\b/.test(command)) {
+    return `${command} -- ${flags}`;
+  }
+
+  return `${command} ${flags}`;
+}
+
 /**
  * Start an app process in the background.
+ *
+ * When `app.port` is `"auto"`, a free port in the 4000–4999 range is
+ * assigned automatically.  The resolved port is persisted to
+ * `.boot/ports/<name>.port` so that `boot status` and `boot down` can
+ * reference it later.  `app.port` is mutated in-place to the resolved
+ * number so callers can read it directly.
  */
 export function startApp(app: AppConfig, projectRoot: string): void {
   ensureDirs();
@@ -91,29 +177,48 @@ export function startApp(app: AppConfig, projectRoot: string): void {
     return;
   }
 
-  // Free port if occupied
-  if (app.port && isPortInUse(app.port)) {
-    log.warn(`Port ${app.port} in use, freeing...`);
-    killPort(app.port);
+  // --- Resolve port ---
+  let resolvedPort: number | undefined;
+
+  if (app.port === "auto") {
+    resolvedPort = findFreePort();
+    log.info(`${app.name}: auto-assigned port ${resolvedPort}`);
+  } else if (typeof app.port === "number") {
+    resolvedPort = app.port;
+  }
+
+  // Free port if occupied (only for explicit / resolved ports)
+  if (resolvedPort !== undefined && isPortInUse(resolvedPort)) {
+    log.warn(`Port ${resolvedPort} in use, freeing...`);
+    killPort(resolvedPort);
     const end = Date.now() + 1000;
     while (Date.now() < end) {
       /* wait */
     }
   }
 
+  // Persist resolved port for status/stop
+  if (resolvedPort !== undefined) {
+    saveResolvedPort(app.name, resolvedPort);
+    (app as any).port = resolvedPort;
+  }
+
   // Open log file
   const logFd = fs.openSync(lf, "a");
 
-  // Ensure app listens on the port boot displays (many frameworks use PORT)
   const env: NodeJS.ProcessEnv = { ...process.env, ...(app.env || {}) };
-  if (app.port !== undefined) {
-    env.PORT = String(app.port);
-    // Vite dev server
-    env.VITE_PORT = String(app.port);
+  if (resolvedPort !== undefined) {
+    env.PORT = String(resolvedPort);
+  }
+
+  // Inject --port/--host for frameworks that ignore PORT env var
+  let command = app.command;
+  if (resolvedPort !== undefined) {
+    command = injectPortFlags(command, resolvedPort, cwd);
   }
 
   // Spawn detached process
-  const child = spawn(app.command, [], {
+  const child = spawn(command, [], {
     cwd,
     env,
     stdio: ["ignore", logFd, logFd],
@@ -138,7 +243,10 @@ export function startApp(app: AppConfig, projectRoot: string): void {
 export function stopApp(app: AppConfig | string): void {
   const appName = typeof app === "string" ? app : app.name;
   const appCommand = typeof app === "string" ? null : app.command;
-  const appPort = typeof app === "string" ? null : app.port;
+  const configPort = typeof app === "string" ? null : app.port;
+  const appPort =
+    (typeof configPort === "number" ? configPort : null) ??
+    getResolvedPort(appName);
 
   const pf = pidFile(appName);
   let stopped = false;
@@ -213,6 +321,8 @@ export function stopApp(app: AppConfig | string): void {
     stopped = true;
   }
 
+  clearResolvedPort(appName);
+
   if (stopped) {
     log.success(`${appName} stopped`);
   } else {
@@ -269,8 +379,11 @@ export function stopAllApps(apps?: AppConfig[]): void {
  */
 export function getAppStatus(
   app: AppConfig
-): { running: boolean; pid: number | null; portPid: number | null } {
+): { running: boolean; pid: number | null; portPid: number | null; resolvedPort: number | null } {
   const pid = getAppPid(app.name);
-  const portPid = app.port ? getPortPid(app.port) : null;
-  return { running: pid !== null, pid, portPid };
+  const effectivePort =
+    (typeof app.port === "number" ? app.port : null) ??
+    getResolvedPort(app.name);
+  const portPid = effectivePort ? getPortPid(effectivePort) : null;
+  return { running: pid !== null, pid, portPid, resolvedPort: effectivePort };
 }

@@ -206,8 +206,8 @@ export interface AppConfig {
   /** Command to start the app */
   command: string;
 
-  /** Port the app listens on */
-  port?: number;
+  /** Port the app listens on. Use "auto" to assign a free port dynamically. */
+  port?: number | "auto";
 
   /** URL to poll for health check */
   health?: string;

@@ -1,166 +1,155 @@
 # Openboot
 
-> Stop writing start scripts. Stop copy-pasting agent files. Just boot.
+> One config for every AI coding tool. One command to start your whole stack.
 
-Every project has the same problem: a README that says "run these 12 commands to get started," a `start.sh` that half works, Docker containers you forgot to start, and env vars you didn't set. New teammates spend hours just trying to run the thing. If that sounds familiar, Openboot is for you.
+Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
 
-Then there's the AI problem: every tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`. `SKILL.md`, `SOUL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between projects and files.
+Boot fixes this. It auto-detects your stack and generates agent context for Cursor, GitHub Copilot, Claude Code, and Codex from one source. Your conventions follow you across projects. Your team's standards apply everywhere.
 
-Boot fixes both. One config file, one command, everything starts, and your AI agent context stays in sync across every tool and every project.
-
+```bash
+npx openboot agent init
+# ▶ Stack: Next.js, Prisma, TypeScript, Tailwind CSS, Vitest
+# ✓ Wrote .cursorrules
+# ✓ Wrote AGENTS.md
+# ✓ Wrote CLAUDE.md
+# ✓ Wrote .github/copilot-instructions.md
 ```
-boot init        → creates boot.yaml (auto-detects your stack)
-boot setup       → one-time setup (deps, DB, migrations)
-boot up          → start everything (Docker + apps + proxy)
-boot dev         → interactive dev mode with live logs
-boot down        → stop everything
-boot status      → show what's running
-boot logs        → view service logs
-boot agent init  → generate AI agent context for your tools
-boot editor init → generate editor config (.vscode, .zed)
-boot hub init    → generate CI workflows (.github, .forgejo)
-boot team set    → connect a shared team profile from a git repo
-```
+
+No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, team profiles, or project setup.
+
+Boot also starts your whole stack with one command: Docker, apps, env checks, reverse proxy — but you can use it just for agent sync. No commitment to the rest.
 
 ## Install
-
-Requires Node 18+. Use `npx openboot` to avoid a global install.
 
 ```bash
 npm install -g openboot
 ```
 
-## Quick Start
+Or try without installing:
 
 ```bash
-boot init        # auto-detects your stack, creates boot.yaml
-boot setup       # install deps, start DB, run migrations
-boot dev         # start everything with live logs (Ctrl+C stops all)
-# → api: http://api.localhost:1355
-# → web: http://web.localhost:1355
+npx openboot agent init
 ```
 
-That's it. Boot detects your Docker services, apps, package manager, env requirements, and generates the config. Every app gets a stable `.localhost` URL — no more remembering port numbers. Boot doesn't replace your scripts, it runs them in the right order, together with Docker and env checks.
+Requires Node 18+.
 
-## AI Agent Context
+## Agent Sync
 
-Boot generates instruction files for AI coding tools — one source of truth, synced to `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md`. If those files already exist, Boot uses their content and does not overwrite them (only creates missing targets). Use `--overwrite` to replace existing files.
-
-**Agent only?** You can use Boot just for agent sync: run `boot agent init` (and optionally `boot agent remember` or `--from`); no need to use setup/up/dev.
+Boot generates and syncs AI agent instruction files from one source of truth. It detects 30+ technologies from your project, merges personal and team conventions, and writes to every target at once.
 
 ```bash
-boot agent init      # generate from your stack + config
-boot agent sync      # regenerate after editing boot.yaml
-boot agent check     # verify targets are in sync (CI-friendly)
-boot agent remember  # save patterns that carry across projects
-boot agent save      # push conventions to your global store
-boot agent status    # see what Boot knows about your project
+boot agent init               # auto-detect stack, generate all targets
+boot agent sync               # regenerate after editing boot.yaml
+boot agent sync --overwrite   # replace existing agent files
+boot agent check              # verify targets are in sync (CI-friendly)
+boot agent remember "..."     # save a pattern that carries across projects
+boot agent status             # see what Boot knows about your project
 ```
 
-Your conventions live in `~/.boot/agent/` and follow you to every project. When you run `boot agent init` in a new repo, your personal patterns are included automatically.
+Existing agent files are preserved — Boot only creates missing targets. Use `--overwrite` to replace them.
 
-Import from another project:
+### Conventions That Follow You
+
+Your conventions live in `~/.boot/agent/` and apply to every project automatically.
+
+```bash
+boot agent remember "Always validate API inputs with zod schemas"
+boot agent remember "Prefer named exports over default exports"
+boot agent save          # push project conventions to your global store
+```
+
+Import conventions from another project:
 
 ```bash
 boot agent init --from ~/other-project
 ```
 
-## Team Profiles
+### Project Config
 
-Share a company-wide baseline across every repo. The team profile lives in a git repo and covers the whole tool, setup commands, env rules, agent conventions, everything. Boot fetches it and merges it under your project config so the team baseline always applies.
+Add an `agent` section to `boot.yaml` for project-specific conventions:
 
-```bash
-boot team set git@github.com:company/boot-standards.git   # connect
-boot team sync                                             # force-pull latest
-boot team check                                            # CI: verify it's applied
-boot team status                                           # see what's merged
-boot team remove                                           # disconnect
+```yaml
+agent:
+  description: "E-commerce platform with Next.js frontend and Express API"
+  conventions:
+    - Use server components by default
+    - All DB access through Prisma
+  references:
+    - git@github.com:Effect-TS/effect.git
+  targets:
+    - .cursorrules
+    - AGENTS.md
+    - CLAUDE.md
+    - .github/copilot-instructions.md
 ```
 
-In your `boot.yaml`:
+### References
+
+Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the content so AI tools can answer questions about your dependencies.
+
+```yaml
+agent:
+  references:
+    - git@github.com:Effect-TS/effect.git
+
+    - url: git@github.com:Effect-TS/effect.git
+      include:
+        - docs/
+        - packages/effect/README.md
+```
+
+Without `include`, Boot pulls the README. With `include`, you control exactly what gets included. Repos are cached at `~/.boot/references/` and auto-refreshed.
+
+## Team Profiles
+
+Share a company-wide baseline across every repo. The team profile lives in a git repo — conventions, env rules, setup commands — and Boot merges it under your project config.
+
+```bash
+boot team set git@github.com:company/boot-standards.git
+boot team sync       # force-pull latest
+boot team check      # CI: verify it's applied
+boot team status     # see what's merged
+boot team remove     # disconnect
+```
 
 ```yaml
 team:
   url: git@github.com:company/boot-standards.git
-  required: true    # fail if the profile can't be resolved
-  branch: main      # optional, defaults to main
+  required: true
 ```
 
-The team repo contains its own `boot.yaml` with the shared rules. Boot merges it as the base layer: team setup commands run first, env requirements are combined, agent conventions are included (labeled separately), and project-specific fields (apps, docker) always come from the project.
+Team conventions appear in a separate section in generated agent files, so it's clear what comes from the team vs. the project.
 
-## Editor Config
+## Project Setup & Dev
 
-Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`.
+Boot also orchestrates your entire dev environment — Docker, app processes, env validation, reverse proxy — from the same `boot.yaml`.
 
 ```bash
-boot editor init     # detect tasks from package.json, write to .vscode/ and .zed/
-boot editor sync     # regenerate after editing boot.yaml
-boot editor check    # verify targets are in sync (CI-friendly)
+boot init          # auto-detect stack, create boot.yaml
+boot setup         # one-time: install deps, start DB, run migrations
+boot dev           # start everything with live logs (Ctrl+C stops all)
+boot up            # start everything in the background
+boot down          # stop everything
+boot status        # show what's running
+boot logs api -f   # follow a service's logs
 ```
 
-In your `boot.yaml`:
+Every app gets a stable `.localhost` URL on port 1355 — no more remembering port numbers:
 
-```yaml
-editor:
-  tasks:
-    - name: dev
-      command: pnpm dev
-    - name: test
-      command: pnpm test
-      group: test
-    - name: lint
-      command: pnpm lint
-  targets:
-    - .vscode
-    - .zed
+```
+api  → http://api.localhost:1355
+web  → http://web.localhost:1355
 ```
 
-## Hub Config
-
-Boot syncs CI workflows and PR templates from one source to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Define your PR template once, generate `.github/PULL_REQUEST_TEMPLATE.md` and `.forgejo/PULL_REQUEST_TEMPLATE.md`.
-
-```bash
-boot hub init        # detect CI steps from package.json, write workflows + PR template
-boot hub sync        # regenerate after editing boot.yaml
-boot hub check       # verify targets are in sync (CI-friendly)
-```
-
-In your `boot.yaml`:
-
-```yaml
-hub:
-  ci:
-    on: [push, pull_request]
-    node: "18"
-    steps:
-      - name: Install
-        run: pnpm install
-      - name: Lint
-        run: pnpm lint
-      - name: Test
-        run: pnpm test
-  prTemplate:
-    sections:
-      - name: Summary
-        prompt: "What changed and why?"
-      - name: Prompt context
-        prompt: "Key prompts or decisions from AI conversations."
-        optional: true
-      - name: Test plan
-        prompt: "How was this tested?"
-  targets:
-    - .github
-    - .forgejo
-```
-
-The `prTemplate` section generates a PR template with the sections you define. Each section becomes a markdown heading with the `prompt` as an HTML comment hint. Sections marked `optional: true` get "(optional)" appended to the heading. Boot includes a default PR template with Summary, Prompt context, and Test plan sections when you run `boot hub init`.
-
-## Config
-
-`boot init` creates a `boot.yaml`:
+### Config
 
 ```yaml
 name: my-project
+
+env:
+  required:
+    - DATABASE_URL
+    - JWT_SECRET
 
 setup:
   - pnpm install
@@ -180,25 +169,19 @@ apps:
   - name: web
     path: apps/web
     command: pnpm dev
-    port: auto          # assigns a free port (4000–4999) at startup
+    port: auto
+```
 
-env:
-  required:
-    - DATABASE_URL
-    - JWT_SECRET
+## Editor & CI Sync
 
-agent:
-  conventions:
-    - Use server components by default
-    - All DB access through Prisma
-  references:
-    - git@github.com:Effect-TS/effect.git
-  targets:
-    - .cursorrules
-    - AGENTS.md
-    - CLAUDE.md
-    - .github/copilot-instructions.md
+Define editor tasks and CI workflows once, generate for multiple targets.
 
+```bash
+boot editor init     # → .vscode/tasks.json + .zed/tasks.json
+boot hub init        # → .github/workflows/ci.yml + .forgejo/workflows/ci.yml
+```
+
+```yaml
 editor:
   tasks:
     - name: dev
@@ -206,14 +189,11 @@ editor:
     - name: test
       command: pnpm test
       group: test
-  targets:
-    - .vscode
-    - .zed
+  targets: [.vscode, .zed]
 
 hub:
   ci:
     on: [push, pull_request]
-    node: "18"
     steps:
       - name: Install
         run: pnpm install
@@ -223,35 +203,12 @@ hub:
     sections:
       - name: Summary
         prompt: "What changed and why?"
-      - name: Prompt context
-        prompt: "Key prompts or decisions from AI conversations."
-        optional: true
       - name: Test plan
         prompt: "How was this tested?"
-  targets:
-    - .github
-    - .forgejo
+  targets: [.github, .forgejo]
 ```
 
-## References
-
-Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the content in your agent context so AI tools can answer questions about your dependencies.
-
-```yaml
-agent:
-  references:
-    # Short form: just a URL (includes the README)
-    - git@github.com:Effect-TS/effect.git
-
-    # Long form: specify exactly what to include
-    - url: git@github.com:Effect-TS/effect.git
-      include:
-        - docs/
-        - packages/effect/README.md
-        - packages/effect/src/index.ts
-```
-
-Without `include`, Boot pulls the README. With `include`, you control exactly what files and directories get included — docs, source, types, whatever is useful for your AI tools. Referenced repos are cloned to `~/.boot/references/` and auto-refreshed.
+Both support `sync`, `check`, and `--overwrite` — same pattern as agent sync.
 
 ## Docs
 

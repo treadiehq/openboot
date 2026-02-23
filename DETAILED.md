@@ -186,8 +186,7 @@ hub:
 | `agent.soul.values` | Core values the agent should prioritize |
 | `agent.soul.boundaries` | Hard limits on agent behavior |
 | `agent.soul.voice` | Communication style guidelines |
-| `agent.skills[].name` | Skill name (used as heading in SKILL.md) |
-| `agent.skills[].steps` | Ordered steps for this skill |
+| `agent.skills.paths` | Additional directories to scan for SKILL.md files (auto-detected: `skills/`, `.codex/skills/`, `.cursor/skills/`) |
 | **editor** | |
 | `editor.tasks[].name` | Task label shown in the editor |
 | `editor.tasks[].command` | Shell command to run |
@@ -431,7 +430,7 @@ Boot generates three separate files, each serving a distinct purpose:
 |---|---|---|
 | `.cursorrules` / `AGENTS.md` / `CLAUDE.md` / `copilot-instructions.md` | Project context — stack, structure, conventions | Always |
 | `SOUL.md` | AI identity — role, values, boundaries, voice | When `agent.soul` is defined |
-| `skills/` directory | Workflows — one file per skill, step-by-step procedures | Always (auto-detected skills + user-defined) |
+| Skills section in agent context | Names and descriptions of detected skills | When skills are found in project |
 
 **Agent context** (`.cursorrules`, etc.) includes:
 
@@ -478,49 +477,47 @@ agent:
 
 Team profiles can define soul fields. Identity uses project if set, else team. Values, boundaries, and voice concatenate (team base + project additions).
 
-### Skills — Project Workflows
+### Skills — Detect & Sync
 
-Boot generates a `skills/` directory with one file per skill. Each skill is a standalone markdown document with a name and numbered steps.
+Boot doesn't generate skills. It detects existing skills that follow the [Agent Skills](https://agentskills.io/) standard and includes their metadata in the generated agent context.
+
+Each skill is a directory containing a `SKILL.md` with YAML frontmatter (`name` and `description`), and optionally `scripts/`, `references/`, and `assets/` subdirectories:
+
+```
+skills/
+├── cloudflare-deploy/
+│   ├── SKILL.md
+│   ├── scripts/
+│   └── references/
+├── github/
+│   └── SKILL.md
+└── coding-agent/
+    └── SKILL.md
+```
+
+**Auto-detection:** Boot scans these directories by default:
+- `skills/`
+- `.codex/skills/`
+- `.cursor/skills/`
+
+**Custom paths:** Add extra scan directories in `boot.yaml`:
 
 ```yaml
 agent:
   skills:
-    - name: Add API endpoint
-      steps:
-        - Create route file in apps/api/src/routes/
-        - Add Zod input validation schema
-        - Register route in apps/api/src/index.ts
-        - Add tests in apps/api/src/routes/__tests__/
-    - name: Deploy
-      steps:
-        - Run pnpm build
-        - Run pnpm deploy
+    paths:
+      - my-skills/
+      - shared/workflows/
 ```
 
-**Generated structure:**
+**What Boot does with detected skills:**
+- Parses the `name` and `description` from each `SKILL.md` frontmatter
+- Includes a "Skills" section in all generated agent context files listing available skills with their descriptions and paths
+- AI tools can then read the full `SKILL.md` when they need to use a skill
 
-```
-skills/
-├── setup.md              (auto-generated)
-├── development.md        (auto-generated)
-├── run-tests.md          (auto-generated)
-├── database-migration.md (auto-generated)
-├── lint.md               (auto-generated)
-├── add-api-endpoint.md   (from boot.yaml)
-├── deploy.md             (from boot.yaml)
-```
+**Team skill syncing:** If your team profile repo contains a `skills/` directory, Boot copies those skill directories into your project's `skills/` directory during `boot agent init` and `boot agent sync`. Existing project skills are never overwritten — use `--overwrite` to replace them.
 
-Boot auto-generates skills from your project stack with zero config:
-
-- **Setup** — from `setup` commands + env requirements
-- **Development** — from app configs + proxy URLs
-- **Run Tests** — if Vitest/Jest/Playwright detected
-- **Database Migration** — if Prisma/Drizzle detected
-- **Lint / Format** — if lint/format scripts detected in package.json
-
-**Append behavior:** Existing skill files are never overwritten — Boot only adds new ones that don't exist yet. Use `--overwrite` to regenerate auto-generated skills. Hand-written skill files you add to the directory are always preserved.
-
-User-defined skills override auto-generated ones with the same name. Team profile skills are merged in (project wins per-skill by name).
+Skills are human-authored capabilities — things like deploying to Cloudflare, managing GitHub issues, or running coding agents. They are not auto-generated task lists. See [agentskills.io](https://agentskills.io/) and [OpenClaw skills](https://github.com/openclaw/openclaw/tree/main/skills) for examples.
 
 ### References
 

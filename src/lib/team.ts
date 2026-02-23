@@ -3,7 +3,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import * as yaml from "yaml";
-import { BootConfig, TeamConfig, ReferenceEntry, SkillEntry } from "../types";
+import { BootConfig, TeamConfig, ReferenceEntry } from "../types";
 import { refUrl } from "./references";
 import { log } from "./log";
 
@@ -263,6 +263,17 @@ export function resolveTeamProfile(
 }
 
 /**
+ * Get the path to the team profile's skills directory (if it exists).
+ */
+export function getTeamSkillsDir(url: string): string | null {
+  const dir = path.join(repoDir(url), "skills");
+  if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+    return dir;
+  }
+  return null;
+}
+
+/**
  * Force-sync a team profile (used by `boot team sync`).
  */
 export function forceSync(team: TeamConfig): ResolvedTeam | null {
@@ -386,13 +397,14 @@ export function mergeConfigs(
       if (merged.agent.soul.voice!.length === 0) delete merged.agent.soul.voice;
     }
 
-    // Skills: concatenate, project wins per-skill by name
+    // Skills: merge paths (deduplicate)
     if (teamAgent.skills || projAgent.skills) {
-      merged.agent.skills = dedupSkills([
-        ...(teamAgent.skills || []),
-        ...(projAgent.skills || []),
-      ]);
-      if (merged.agent.skills.length === 0) delete merged.agent.skills;
+      const teamPaths = teamAgent.skills?.paths || [];
+      const projPaths = projAgent.skills?.paths || [];
+      const mergedPaths = dedup([...teamPaths, ...projPaths]);
+      if (mergedPaths.length > 0) {
+        merged.agent.skills = { paths: mergedPaths };
+      }
     }
 
     // Clean up
@@ -423,22 +435,6 @@ function dedupRefs(arr: ReferenceEntry[]): ReferenceEntry[] {
     const url = refUrl(arr[i]);
     if (!seen.has(url)) {
       seen.add(url);
-      result.unshift(arr[i]);
-    }
-  }
-  return result;
-}
-
-/**
- * Deduplicate skills by name (case-insensitive). Later entries (project) win.
- */
-function dedupSkills(arr: SkillEntry[]): SkillEntry[] {
-  const seen = new Set<string>();
-  const result: SkillEntry[] = [];
-  for (let i = arr.length - 1; i >= 0; i--) {
-    const key = arr[i].name.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
       result.unshift(arr[i]);
     }
   }

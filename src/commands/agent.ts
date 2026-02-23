@@ -6,10 +6,10 @@ import { AgentConfig } from "../types";
 import {
   detectAgentFiles,
   detectStack,
+  detectSkills,
   formatStackName,
   generateAgentMarkdown,
   generateSoulMarkdown,
-  generateSkillFiles,
   syncTargets,
   checkSync,
   getOrDetectConfig,
@@ -22,6 +22,7 @@ import {
   DEFAULT_TARGETS,
   AGENT_HOME,
 } from "../lib/agent";
+import { getTeamSkillsDir } from "../lib/team";
 
 /**
  * Register all `boot agent` subcommands on the program.
@@ -86,17 +87,28 @@ export function registerAgentCommands(program: Command): void {
           log.success(`Added agent section to ${path.basename(configPath)}`);
         }
 
-        // Generate all pipelines
+        // Show detected skills
+        const skills = detectSkills(cwd, config.agent?.skills?.paths);
+        if (skills.length > 0) {
+          log.info(`Skills: ${skills.map((s) => s.name).join(", ")}`);
+        }
+
+        // Resolve team skills directory
+        let teamSkillsDir: string | null = null;
+        if (config.team?.url) {
+          teamSkillsDir = getTeamSkillsDir(config.team.url);
+        }
+
+        // Generate context
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
         const soulMarkdown = generateSoulMarkdown(config, cwd);
-        const skillFiles = generateSkillFiles(config, cwd);
 
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
           soulMarkdown,
-          skillFiles,
+          teamSkillsDir,
         });
 
         log.blank();
@@ -133,16 +145,20 @@ export function registerAgentCommands(program: Command): void {
         const cwd = process.cwd();
         const config = getOrDetectConfig(cwd);
 
+        let teamSkillsDir: string | null = null;
+        if (config.team?.url) {
+          teamSkillsDir = getTeamSkillsDir(config.team.url);
+        }
+
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
         const soulMarkdown = generateSoulMarkdown(config, cwd);
-        const skillFiles = generateSkillFiles(config, cwd);
 
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
           soulMarkdown,
-          skillFiles,
+          teamSkillsDir,
         });
 
         for (const file of written) {
@@ -299,10 +315,9 @@ export function registerAgentCommands(program: Command): void {
               if (config.agent.soul.voice?.length) soulFields.push(`${config.agent.soul.voice.length} voice guidelines`);
               log.step(`  Soul: ${soulFields.join(", ")}`);
             }
-            if (config.agent.skills?.length) {
-              log.step(
-                `  Skills: ${config.agent.skills.length} user-defined`
-              );
+            const skills = detectSkills(cwd, config.agent.skills?.paths);
+            if (skills.length > 0) {
+              log.step(`  Skills: ${skills.length} detected (${skills.map((s) => s.name).join(", ")})`);
             }
           } else {
             log.info(

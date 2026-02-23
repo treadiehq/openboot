@@ -9,12 +9,11 @@ Boot fixes this. It auto-detects your stack and generates agent context for Curs
 ```bash
 npx openboot agent init
 # ▶ Stack: Next.js, Prisma, TypeScript, Tailwind CSS, Vitest
+# ▶ Skills: cloudflare-deploy, github, coding-agent
 # ✓ Wrote .cursorrules
 # ✓ Wrote AGENTS.md
 # ✓ Wrote CLAUDE.md
 # ✓ Wrote .github/copilot-instructions.md
-# ✓ Wrote skills/setup.md
-# ✓ Wrote skills/run-tests.md
 ```
 
 No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, soul, skills, or team profiles.
@@ -104,33 +103,31 @@ agent:
       - When uncertain, say so
 ```
 
-### Skills — Project Workflows
+### Skills — Detect & Sync
 
-Define step-by-step workflows for common tasks. Boot generates a `skills/` directory with one file per skill. It auto-generates skills from your stack (setup, testing, migrations) and merges your custom ones — no config needed for auto-detected skills.
+Boot doesn't generate skills — it finds and syncs the ones you already have. Skills follow the [Agent Skills](https://agentskills.io/) standard: each skill is a directory with a `SKILL.md` file containing YAML frontmatter.
 
 ```
 skills/
-├── setup.md              (auto-generated)
-├── development.md        (auto-generated)
-├── run-tests.md          (auto-generated)
-├── database-migration.md (auto-generated)
-├── add-api-endpoint.md   (from boot.yaml)
+├── cloudflare-deploy/
+│   └── SKILL.md
+├── github/
+│   └── SKILL.md
+└── coding-agent/
+    └── SKILL.md
 ```
 
-Add custom skills in `boot.yaml`:
+Boot auto-scans `skills/`, `.codex/skills/`, and `.cursor/skills/` for existing skills and includes their names and descriptions in the generated agent context. You can also specify custom scan paths:
 
 ```yaml
 agent:
   skills:
-    - name: Add API endpoint
-      steps:
-        - Create route file in apps/api/src/routes/
-        - Add Zod input validation
-        - Register route in apps/api/src/index.ts
-        - Add tests
+    paths:
+      - my-skills/
+      - shared/workflows/
 ```
 
-Existing skill files are never overwritten — Boot only adds new ones. Use `--overwrite` to regenerate auto-generated skills.
+If your team profile repo has a `skills/` directory, Boot syncs those skills into your project during `boot agent init` and `boot agent sync` — so the whole team shares the same capabilities.
 
 ### References
 

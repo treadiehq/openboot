@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import * as yaml from "yaml";
-import { BootConfig, AgentConfig, SoulConfig, SkillEntry } from "../types";
+import { BootConfig, AgentConfig, SoulConfig, SkillsConfig } from "../types";
 import { detectPackageManager, findConfig, loadConfig, getTeamConfigSeparately } from "./config";
 import { resolveAllReferences } from "./references";
 
@@ -475,6 +475,21 @@ export function generateAgentMarkdown(
     }
   }
 
+  // ── Skills (detected from project) ──
+  const skillPaths = config.agent?.skills?.paths;
+  const detectedSkills = detectSkills(cwd, skillPaths);
+  if (detectedSkills.length > 0) {
+    lines.push("## Skills");
+    lines.push("");
+    lines.push("Available project skills (each has a `SKILL.md` with full instructions):");
+    lines.push("");
+    for (const skill of detectedSkills) {
+      const desc = skill.description ? ` — ${skill.description}` : "";
+      lines.push(`- **${skill.name}** (\`${skill.path}/SKILL.md\`)${desc}`);
+    }
+    lines.push("");
+  }
+
   // ── References (git repos cloned as context) ──
   if (config.agent?.references && config.agent.references.length > 0) {
     const refs = resolveAllReferences(config.agent.references);
@@ -616,135 +631,78 @@ export function generateSoulMarkdown(
 }
 
 // ────────────────────────────────────────────────
-// SKILL.md Generation
+// Skill Detection
 // ────────────────────────────────────────────────
 
+/** Parsed metadata from a SKILL.md file. */
+export interface DetectedSkill {
+  /** Skill name (from frontmatter or directory name) */
+  name: string;
+  /** Skill description (from frontmatter) */
+  description: string;
+  /** Relative path to the skill directory */
+  path: string;
+}
+
+/** Default directories to scan for skills. */
+const DEFAULT_SKILL_PATHS = ["skills", ".codex/skills", ".cursor/skills"];
+
 /**
- * Auto-generate skills from detected stack and config.
+ * Detect existing skills in the project by scanning for SKILL.md files.
+ * Parses YAML frontmatter to extract name and description.
  */
-function generateAutoSkills(config: BootConfig, cwd: string, stack: string[]): SkillEntry[] {
-  const skills: SkillEntry[] = [];
-  const pm = config.packageManager || detectPackageManager(cwd);
+export function detectSkills(cwd: string, extraPaths?: string[]): DetectedSkill[] {
+  const scanPaths = [...DEFAULT_SKILL_PATHS, ...(extraPaths || [])];
+  const skills: DetectedSkill[] = [];
+  const seen = new Set<string>();
 
-  // Setup skill
-  if (config.setup && config.setup.length > 0) {
-    const steps: string[] = [];
-    if (config.env?.required && config.env.required.length > 0) {
-      const envFile = config.env.file || ".env";
-      steps.push(`Copy \`.env.example\` to \`${envFile}\` and fill in: ${config.env.required.map((v) => `\`${v}\``).join(", ")}`);
+  for (const scanPath of scanPaths) {
+    const dir = path.join(cwd, scanPath);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
+
+    for (const entry of fs.readdirSync(dir)) {
+      const skillDir = path.join(dir, entry);
+      if (!fs.statSync(skillDir).isDirectory()) continue;
+
+      const skillFile = path.join(skillDir, "SKILL.md");
+      if (!fs.existsSync(skillFile)) continue;
+
+      const key = entry.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const parsed = parseSkillFrontmatter(skillFile, entry);
+      if (parsed) {
+        skills.push({ ...parsed, path: `${scanPath}/${entry}` });
+      }
     }
-    steps.push("Run `boot setup` to install deps, start services, and run migrations");
-    for (const cmd of config.setup) {
-      steps.push(`\`${cmd}\``);
-    }
-    skills.push({ name: "Setup", steps });
-  }
-
-  // Development skill
-  if (config.apps && config.apps.length > 0) {
-    const steps: string[] = ["Run `boot dev` to start all services with live logs"];
-    for (const app of config.apps) {
-      const port = app.port === "auto" ? "(auto-assigned)" : app.port;
-      steps.push(`${app.name}: http://${app.name}.localhost:1355 (port ${port})`);
-    }
-    skills.push({ name: "Development", steps });
-  }
-
-  // Testing skill
-  if (stack.includes("vitest")) {
-    skills.push({ name: "Run Tests", steps: [`Run \`${pm} test\` (Vitest)`] });
-  } else if (stack.includes("jest")) {
-    skills.push({ name: "Run Tests", steps: [`Run \`${pm} test\` (Jest)`] });
-  } else if (stack.includes("playwright")) {
-    skills.push({ name: "Run Tests", steps: [`Run \`${pm} test\` (Playwright)`] });
-  }
-
-  // Database migration skill
-  if (stack.includes("prisma")) {
-    skills.push({
-      name: "Database Migration",
-      steps: [
-        "Edit `prisma/schema.prisma`",
-        "Run `npx prisma migrate dev --name <migration-name>`",
-        "Run `npx prisma generate`",
-      ],
-    });
-  } else if (stack.includes("drizzle")) {
-    skills.push({
-      name: "Database Migration",
-      steps: [
-        "Edit your Drizzle schema file",
-        `Run \`${pm} drizzle-kit generate\``,
-        `Run \`${pm} drizzle-kit migrate\``,
-      ],
-    });
-  }
-
-  // Lint skill
-  const rootPkg = readPackageJson(cwd);
-  if (rootPkg?.scripts?.lint) {
-    skills.push({ name: "Lint", steps: [`Run \`${pm} lint\``] });
-  }
-  if (rootPkg?.scripts?.format) {
-    skills.push({ name: "Format", steps: [`Run \`${pm} format\``] });
   }
 
   return skills;
 }
 
-/** A single skill file to be written to the skills/ directory. */
-export interface SkillFile {
-  /** Filename (e.g. "setup.md") */
-  filename: string;
-  /** Full markdown content */
-  content: string;
-}
-
-/** The default skills directory name. */
-export const SKILLS_DIR = "skills";
-
 /**
- * Convert a skill name to a kebab-case filename.
+ * Parse YAML frontmatter from a SKILL.md file.
+ * Returns name and description, or null if the file can't be parsed.
  */
-function skillFilename(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "") + ".md";
-}
-
-/**
- * Generate individual skill files for the skills/ directory.
- * Returns one SkillFile per skill. Auto-generated skills are merged with user-defined ones.
- */
-export function generateSkillFiles(
-  config: BootConfig,
-  cwd: string
-): SkillFile[] {
-  const stack = detectStack(cwd);
-  const autoSkills = generateAutoSkills(config, cwd, stack);
-  const userSkills = config.agent?.skills || [];
-
-  const userNames = new Set(userSkills.map((s) => s.name.toLowerCase()));
-  const mergedSkills = [
-    ...autoSkills.filter((s) => !userNames.has(s.name.toLowerCase())),
-    ...userSkills,
-  ];
-
-  return mergedSkills.map((skill) => {
-    const lines: string[] = [];
-    lines.push("<!-- Generated by `boot agent` -->");
-    lines.push("");
-    lines.push(`# ${skill.name}`);
-    lines.push("");
-    for (let i = 0; i < skill.steps.length; i++) {
-      lines.push(`${i + 1}. ${skill.steps[i]}`);
+function parseSkillFrontmatter(
+  filePath: string,
+  fallbackName: string
+): { name: string; description: string } | null {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+    if (fmMatch) {
+      const fm = yaml.parse(fmMatch[1]);
+      return {
+        name: fm?.name || fallbackName,
+        description: fm?.description || "",
+      };
     }
-    return {
-      filename: skillFilename(skill.name),
-      content: lines.join("\n").trimEnd() + "\n",
-    };
-  });
+    return { name: fallbackName, description: "" };
+  } catch {
+    return null;
+  }
 }
 
 // ────────────────────────────────────────────────
@@ -758,7 +716,8 @@ export interface SyncTargetsResult {
 
 /**
  * Write the agent markdown to all configured target files.
- * Also writes SOUL.md and skills/ directory when content is provided.
+ * Also writes SOUL.md when content is provided.
+ * Syncs team skills into the project skills/ directory when provided.
  * Creates parent directories as needed.
  * When overwrite is false (default), skips any target that already exists so existing project rules are preserved.
  */
@@ -766,7 +725,7 @@ export function syncTargets(
   config: BootConfig,
   markdown: string,
   cwd: string,
-  options: { overwrite?: boolean; soulMarkdown?: string | null; skillFiles?: SkillFile[] } = {}
+  options: { overwrite?: boolean; soulMarkdown?: string | null; teamSkillsDir?: string | null } = {}
 ): SyncTargetsResult {
   const overwrite = options.overwrite === true;
   const targets = config.agent?.targets || DEFAULT_TARGETS;
@@ -801,30 +760,52 @@ export function syncTargets(
     }
   }
 
-  // skills/ directory — one file per skill
-  if (options.skillFiles && options.skillFiles.length > 0) {
-    const skillsDir = path.join(cwd, SKILLS_DIR);
-    if (!fs.existsSync(skillsDir)) {
-      fs.mkdirSync(skillsDir, { recursive: true });
+  // Team skills — sync from team profile's skills/ directory
+  if (options.teamSkillsDir && fs.existsSync(options.teamSkillsDir)) {
+    const projectSkillsDir = path.join(cwd, "skills");
+    if (!fs.existsSync(projectSkillsDir)) {
+      fs.mkdirSync(projectSkillsDir, { recursive: true });
     }
 
-    for (const sf of options.skillFiles) {
-      const filePath = path.join(skillsDir, sf.filename);
-      if (fs.existsSync(filePath) && !overwrite) {
-        skipped.push(`${SKILLS_DIR}/${sf.filename}`);
-      } else {
-        fs.writeFileSync(filePath, sf.content);
-        written.push(`${SKILLS_DIR}/${sf.filename}`);
+    for (const entry of fs.readdirSync(options.teamSkillsDir)) {
+      const srcDir = path.join(options.teamSkillsDir, entry);
+      if (!fs.statSync(srcDir).isDirectory()) continue;
+
+      const srcSkill = path.join(srcDir, "SKILL.md");
+      if (!fs.existsSync(srcSkill)) continue;
+
+      const destDir = path.join(projectSkillsDir, entry);
+      if (fs.existsSync(destDir) && !overwrite) {
+        skipped.push(`skills/${entry}`);
+        continue;
       }
+
+      copyDirRecursive(srcDir, destDir);
+      written.push(`skills/${entry}`);
     }
   }
 
   return { written, skipped };
 }
 
+function copyDirRecursive(src: string, dest: string): void {
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  for (const entry of fs.readdirSync(src)) {
+    const srcPath = path.join(src, entry);
+    const destPath = path.join(dest, entry);
+    if (fs.statSync(srcPath).isDirectory()) {
+      copyDirRecursive(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
+
 /**
  * Check if target files are in sync with the current config.
- * Includes SOUL.md and SKILL.md when applicable.
+ * Includes SOUL.md when applicable.
  */
 export function checkSync(
   config: BootConfig,
@@ -855,39 +836,20 @@ export function checkSync(
   // Check SOUL.md
   const soulMd = generateSoulMarkdown(config, cwd);
   if (soulMd) {
-    checkFile(path.join(cwd, "SOUL.md"), soulMd, "SOUL.md", result);
-  }
-
-  // Check skills/ directory
-  const skillFiles = generateSkillFiles(config, cwd);
-  for (const sf of skillFiles) {
-    checkFile(
-      path.join(cwd, SKILLS_DIR, sf.filename),
-      sf.content,
-      `${SKILLS_DIR}/${sf.filename}`,
-      result
-    );
+    const soulPath = path.join(cwd, "SOUL.md");
+    if (!fs.existsSync(soulPath)) {
+      result.missing.push("SOUL.md");
+    } else {
+      const existing = fs.readFileSync(soulPath, "utf-8");
+      if (existing.trim() === soulMd.trim()) {
+        result.ok.push("SOUL.md");
+      } else {
+        result.stale.push("SOUL.md");
+      }
+    }
   }
 
   return result;
-}
-
-function checkFile(
-  fullPath: string,
-  canonical: string,
-  label: string,
-  result: { missing: string[]; stale: string[]; ok: string[] }
-): void {
-  if (!fs.existsSync(fullPath)) {
-    result.missing.push(label);
-  } else {
-    const existing = fs.readFileSync(fullPath, "utf-8");
-    if (existing.trim() === canonical.trim()) {
-      result.ok.push(label);
-    } else {
-      result.stale.push(label);
-    }
-  }
 }
 
 // ────────────────────────────────────────────────

@@ -60,8 +60,8 @@ export interface AgentConfig {
   /** AI identity — who the agent is in this project (generates SOUL.md) */
   soul?: SoulConfig;
 
-  /** Project-specific workflows and procedures (generates SKILL.md) */
-  skills?: SkillEntry[];
+  /** Skill detection and syncing config */
+  skills?: SkillsConfig;
 }
 
 export interface SoulConfig {
@@ -78,12 +78,9 @@ export interface SoulConfig {
   voice?: string[];
 }
 
-export interface SkillEntry {
-  /** Skill name (used as heading) */
-  name: string;
-
-  /** Ordered steps for this skill */
-  steps: string[];
+export interface SkillsConfig {
+  /** Directories to scan for SKILL.md files (default: auto-detected) */
+  paths?: string[];
 }
 
 /** A reference can be a plain URL string or an object with include paths */

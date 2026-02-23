@@ -105,7 +105,7 @@ agent:
 
 ### Skills — Detect & Sync
 
-Boot doesn't generate skills — it finds and syncs the ones you already have. Skills follow the [Agent Skills](https://agentskills.io/) standard: each skill is a directory with a `SKILL.md` file containing YAML frontmatter.
+Boot doesn't generate skills, it finds and syncs the ones you already have. Skills follow the [Agent Skills](https://agentskills.io/) standard: each skill is a directory with a `SKILL.md` file containing YAML frontmatter.
 
 ```
 skills/
@@ -127,7 +127,7 @@ agent:
       - shared/workflows/
 ```
 
-If your team profile repo has a `skills/` directory, Boot syncs those skills into your project during `boot agent init` and `boot agent sync` — so the whole team shares the same capabilities.
+If your team profile repo has a `skills/` directory, Boot syncs those skills into your project during `boot agent init` and `boot agent sync`, so the whole team shares the same capabilities.
 
 ### References
 

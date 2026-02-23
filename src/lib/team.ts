@@ -3,7 +3,7 @@ import * as path from "path";
 import * as crypto from "crypto";
 import { execSync } from "child_process";
 import * as yaml from "yaml";
-import { BootConfig, TeamConfig, ReferenceEntry } from "../types";
+import { BootConfig, TeamConfig, ReferenceEntry, SkillEntry } from "../types";
 import { refUrl } from "./references";
 import { log } from "./log";
 
@@ -370,6 +370,31 @@ export function mergeConfigs(
       ]),
     };
 
+    // Soul: project identity wins; values/boundaries/voice concatenate
+    if (teamAgent.soul || projAgent.soul) {
+      const teamSoul = teamAgent.soul || {};
+      const projSoul = projAgent.soul || {};
+      merged.agent.soul = {
+        identity: projSoul.identity || teamSoul.identity,
+        values: dedup([...(teamSoul.values || []), ...(projSoul.values || [])]),
+        boundaries: dedup([...(teamSoul.boundaries || []), ...(projSoul.boundaries || [])]),
+        voice: dedup([...(teamSoul.voice || []), ...(projSoul.voice || [])]),
+      };
+      if (!merged.agent.soul.identity) delete merged.agent.soul.identity;
+      if (merged.agent.soul.values!.length === 0) delete merged.agent.soul.values;
+      if (merged.agent.soul.boundaries!.length === 0) delete merged.agent.soul.boundaries;
+      if (merged.agent.soul.voice!.length === 0) delete merged.agent.soul.voice;
+    }
+
+    // Skills: concatenate, project wins per-skill by name
+    if (teamAgent.skills || projAgent.skills) {
+      merged.agent.skills = dedupSkills([
+        ...(teamAgent.skills || []),
+        ...(projAgent.skills || []),
+      ]);
+      if (merged.agent.skills.length === 0) delete merged.agent.skills;
+    }
+
     // Clean up
     if (!merged.agent.description) delete merged.agent.description;
     if (merged.agent.conventions!.length === 0) delete merged.agent.conventions;
@@ -398,6 +423,22 @@ function dedupRefs(arr: ReferenceEntry[]): ReferenceEntry[] {
     const url = refUrl(arr[i]);
     if (!seen.has(url)) {
       seen.add(url);
+      result.unshift(arr[i]);
+    }
+  }
+  return result;
+}
+
+/**
+ * Deduplicate skills by name (case-insensitive). Later entries (project) win.
+ */
+function dedupSkills(arr: SkillEntry[]): SkillEntry[] {
+  const seen = new Set<string>();
+  const result: SkillEntry[] = [];
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const key = arr[i].name.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
       result.unshift(arr[i]);
     }
   }

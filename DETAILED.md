@@ -182,6 +182,12 @@ hub:
 | `agent.conventions` | Coding conventions for AI agents to follow |
 | `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
 | `agent.references` | Git repos to clone as AI context. String (URL) or object (`url` + `include` paths) |
+| `agent.soul.identity` | Freeform paragraph defining who the agent is in this project |
+| `agent.soul.values` | Core values the agent should prioritize |
+| `agent.soul.boundaries` | Hard limits on agent behavior |
+| `agent.soul.voice` | Communication style guidelines |
+| `agent.skills[].name` | Skill name (used as heading in SKILL.md) |
+| `agent.skills[].steps` | Ordered steps for this skill |
 | **editor** | |
 | `editor.tasks[].name` | Task label shown in the editor |
 | `editor.tasks[].command` | Shell command to run |
@@ -419,7 +425,15 @@ Three sources merge into one output:
 
 ### Generated Output
 
-The generated markdown includes (when available):
+Boot generates three separate files, each serving a distinct purpose:
+
+| File | Purpose | Generated when |
+|---|---|---|
+| `.cursorrules` / `AGENTS.md` / `CLAUDE.md` / `copilot-instructions.md` | Project context — stack, structure, conventions | Always |
+| `SOUL.md` | AI identity — role, values, boundaries, voice | When `agent.soul` is defined |
+| `SKILL.md` | Workflows — step-by-step procedures for common tasks | Always (auto-detected skills + user-defined) |
+
+**Agent context** (`.cursorrules`, etc.) includes:
 
 - **Stack** — detected frameworks, tools, package manager
 - **Project Structure** — apps with paths and ports
@@ -430,6 +444,68 @@ The generated markdown includes (when available):
 - **Personal Conventions** — from `~/.boot/agent/conventions.md`
 - **Remembered Patterns** — from `~/.boot/agent/memory.md`
 - **References** — content from repos listed in `agent.references`
+
+### Soul — AI Identity
+
+Inspired by the [soul document](https://soul.md/) concept. Define who the AI agent is in your project — not rules about what code to write, but identity, values, and how the agent relates to the team.
+
+```yaml
+agent:
+  soul:
+    identity: "You are a senior fullstack engineer working on an e-commerce platform. You care deeply about code quality and user experience."
+    values:
+      - Correctness over speed — get it right, not just working
+      - Ask before making breaking changes
+      - Type safety is non-negotiable
+    boundaries:
+      - Never modify production configs directly
+      - Always run tests before marking work as complete
+      - Don't commit secrets or .env files
+    voice:
+      - Be direct and concise
+      - Show code, don't just explain
+      - When uncertain, say so — don't guess
+```
+
+`SOUL.md` is only generated when `agent.soul` is defined — identity is intentional, not auto-detected.
+
+| Field | Description |
+|---|---|
+| `soul.identity` | Freeform paragraph — the "who you are" statement |
+| `soul.values` | What the agent should prioritize |
+| `soul.boundaries` | Hard limits on behavior |
+| `soul.voice` | Communication style |
+
+Team profiles can define soul fields. Identity uses project if set, else team. Values, boundaries, and voice concatenate (team base + project additions).
+
+### Skills — Project Workflows
+
+Define step-by-step workflows that teach AI agents how to perform common tasks in your project.
+
+```yaml
+agent:
+  skills:
+    - name: Add API endpoint
+      steps:
+        - Create route file in apps/api/src/routes/
+        - Add Zod input validation schema
+        - Register route in apps/api/src/index.ts
+        - Add tests in apps/api/src/routes/__tests__/
+    - name: Deploy
+      steps:
+        - Run pnpm build
+        - Run pnpm deploy
+```
+
+Boot auto-generates skills from your project stack with zero config:
+
+- **Setup** — from `setup` commands + env requirements
+- **Development** — from app configs + proxy URLs
+- **Run Tests** — if Vitest/Jest/Playwright detected
+- **Database Migration** — if Prisma/Drizzle detected
+- **Lint / Format** — if lint/format scripts detected in package.json
+
+User-defined skills override auto-generated ones with the same name. Team profile skills are merged in (project wins per-skill by name).
 
 ### References
 

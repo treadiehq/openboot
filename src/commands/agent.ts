@@ -8,6 +8,8 @@ import {
   detectStack,
   formatStackName,
   generateAgentMarkdown,
+  generateSoulMarkdown,
+  generateSkillMarkdown,
   syncTargets,
   checkSync,
   getOrDetectConfig,
@@ -84,12 +86,17 @@ export function registerAgentCommands(program: Command): void {
           log.success(`Added agent section to ${path.basename(configPath)}`);
         }
 
-        // Generate and sync (include existing agent file content; don't overwrite existing targets by default)
+        // Generate all pipelines
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
+        const soulMarkdown = generateSoulMarkdown(config, cwd);
+        const skillMarkdown = generateSkillMarkdown(config, cwd);
+
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
+          soulMarkdown,
+          skillMarkdown,
         });
 
         log.blank();
@@ -129,8 +136,13 @@ export function registerAgentCommands(program: Command): void {
         const markdown = generateAgentMarkdown(config, cwd, {
           includeGlobal: opts.global,
         });
+        const soulMarkdown = generateSoulMarkdown(config, cwd);
+        const skillMarkdown = generateSkillMarkdown(config, cwd);
+
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
+          soulMarkdown,
+          skillMarkdown,
         });
 
         for (const file of written) {
@@ -277,6 +289,19 @@ export function registerAgentCommands(program: Command): void {
             if (config.agent.targets?.length) {
               log.step(
                 `  Targets: ${config.agent.targets.join(", ")}`
+              );
+            }
+            if (config.agent.soul) {
+              const soulFields: string[] = [];
+              if (config.agent.soul.identity) soulFields.push("identity");
+              if (config.agent.soul.values?.length) soulFields.push(`${config.agent.soul.values.length} values`);
+              if (config.agent.soul.boundaries?.length) soulFields.push(`${config.agent.soul.boundaries.length} boundaries`);
+              if (config.agent.soul.voice?.length) soulFields.push(`${config.agent.soul.voice.length} voice guidelines`);
+              log.step(`  Soul: ${soulFields.join(", ")}`);
+            }
+            if (config.agent.skills?.length) {
+              log.step(
+                `  Skills: ${config.agent.skills.length} user-defined`
               );
             }
           } else {

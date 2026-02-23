@@ -2,9 +2,9 @@
 
 > One config for every AI coding tool. One command to start your whole stack.
 
-Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
+Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, `SKILL.md`, `copilot-instructions.md` — and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
 
-Boot fixes this. It auto-detects your stack and generates agent context for Cursor, GitHub Copilot, Claude Code, and Codex from one source. Your conventions follow you across projects. Your team's standards apply everywhere.
+Boot fixes this. It auto-detects your stack and generates agent context for Cursor, GitHub Copilot, OpenCode Claude Code, and Codex from one source. Your conventions follow you across projects. Your team's standards apply everywhere.
 
 ```bash
 npx openboot agent init
@@ -13,9 +13,10 @@ npx openboot agent init
 # ✓ Wrote AGENTS.md
 # ✓ Wrote CLAUDE.md
 # ✓ Wrote .github/copilot-instructions.md
+# ✓ Wrote SKILL.md
 ```
 
-No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, team profiles, or project setup.
+No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, soul, skills, or team profiles.
 
 Boot also starts your whole stack with one command: Docker, apps, env checks, reverse proxy — but you can use it just for agent sync. No commitment to the rest.
 
@@ -81,6 +82,40 @@ agent:
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
+```
+
+### Soul — AI Identity
+
+Define who the AI agent is in your project — its values, boundaries, and voice. Inspired by the [soul document](https://soul.md/) concept. Boot generates a `SOUL.md` when you add a `soul` section.
+
+```yaml
+agent:
+  soul:
+    identity: "You are a senior fullstack engineer. You care about code quality and user experience."
+    values:
+      - Correctness over speed
+      - Ask before making breaking changes
+    boundaries:
+      - Never modify production configs directly
+      - Always run tests before marking work complete
+    voice:
+      - Be direct and concise
+      - When uncertain, say so
+```
+
+### Skills — Project Workflows
+
+Define step-by-step workflows for common tasks. Boot auto-generates skills from your stack (setup, testing, migrations) and merges your custom ones. A `SKILL.md` is always generated, no config needed for auto-detected skills.
+
+```yaml
+agent:
+  skills:
+    - name: Add API endpoint
+      steps:
+        - Create route file in apps/api/src/routes/
+        - Add Zod input validation
+        - Register route in apps/api/src/index.ts
+        - Add tests
 ```
 
 ### References

@@ -56,6 +56,34 @@ export interface AgentConfig {
    * Supports short form (just a URL string) or long form (object with include paths).
    */
   references?: ReferenceEntry[];
+
+  /** AI identity — who the agent is in this project (generates SOUL.md) */
+  soul?: SoulConfig;
+
+  /** Project-specific workflows and procedures (generates SKILL.md) */
+  skills?: SkillEntry[];
+}
+
+export interface SoulConfig {
+  /** Freeform identity paragraph — who the agent is in this project */
+  identity?: string;
+
+  /** Core values the agent should prioritize */
+  values?: string[];
+
+  /** Hard limits on agent behavior */
+  boundaries?: string[];
+
+  /** Communication style guidelines */
+  voice?: string[];
+}
+
+export interface SkillEntry {
+  /** Skill name (used as heading) */
+  name: string;
+
+  /** Ordered steps for this skill */
+  steps: string[];
 }
 
 /** A reference can be a plain URL string or an object with include paths */

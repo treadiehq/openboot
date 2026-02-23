@@ -15,8 +15,6 @@ import {
   ContainerConfig,
 } from "../types";
 import { detectAgentFiles, DEFAULT_TARGETS } from "../lib/agent";
-import { detectEditorTasks, DEFAULT_EDITOR_TARGETS } from "../lib/editor";
-import { detectCISteps, detectNodeVersion, DEFAULT_HUB_TARGETS, DEFAULT_PR_TEMPLATE_SECTIONS } from "../lib/hub";
 
 /**
  * `boot init` — auto-detect project structure and create boot.yaml.
@@ -288,31 +286,8 @@ export async function init(): Promise<void> {
     };
   }
 
-  // --- Detect editor tasks ---
-  const editorTasks = detectEditorTasks(cwd, config);
-  if (editorTasks.length > 0) {
-    config.editor = {
-      tasks: editorTasks,
-      targets: DEFAULT_EDITOR_TARGETS,
-    };
-    log.success(`Detected ${editorTasks.length} editor task(s)`);
-  }
-
-  // --- Detect hub CI steps ---
-  const ciSteps = detectCISteps(cwd, config);
-  if (ciSteps.length > 0) {
-    const nodeVersion = detectNodeVersion(cwd) || "18";
-    config.hub = {
-      ci: {
-        on: ["push", "pull_request"],
-        node: nodeVersion,
-        steps: ciSteps,
-      },
-      prTemplate: { sections: DEFAULT_PR_TEMPLATE_SECTIONS },
-      targets: DEFAULT_HUB_TARGETS,
-    };
-    log.success(`Detected ${ciSteps.length} CI step(s)`);
-  }
+  // editor and hub sections are not added during `boot init`.
+  // Use `boot editor init` and `boot hub init` to generate them.
 
   // --- Write config ---
   const yamlStr = yaml.stringify(config, {

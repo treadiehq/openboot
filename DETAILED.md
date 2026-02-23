@@ -363,7 +363,7 @@ boot agent remember "Use early returns for guard clauses"
 boot agent remember "Prefer named exports over default exports"
 ```
 
-These show up automatically in every future `boot agent init` / `boot agent sync` under a "Remembered Patterns" section.
+These show up automatically in every future `boot agent init` / `boot agent sync` under the "Conventions" section.
 
 ### `boot agent save`
 
@@ -437,11 +437,10 @@ Boot generates three separate files, each serving a distinct purpose:
 - **Stack** — detected frameworks, tools, package manager
 - **Project Structure** — apps with paths and ports
 - **Services** — Docker services (Postgres, Redis, etc.)
-- **Commands** — boot dev, boot setup, etc.
+- **Tooling** — actionable commands: test runner, linter, formatter, DB migrations, dev server
 - **Environment** — required env vars
-- **Conventions** — from `boot.yaml` agent section
-- **Personal Conventions** — from `~/.boot/agent/conventions.md`
-- **Remembered Patterns** — from `~/.boot/agent/memory.md`
+- **Conventions** — all conventions merged into one list (project, team, personal, remembered)
+- **Skills** — detected skills with names and descriptions
 - **References** — content from repos listed in `agent.references`
 
 ### Soul — AI Identity
@@ -910,7 +909,7 @@ Add `boot team check` to your CI pipeline to verify the team profile is applied:
 
 ### Agent Context
 
-When generating agent markdown (`boot agent init` / `boot agent sync`), team conventions appear in a separate **Team Conventions** section so it's clear what comes from the team vs. the project.
+When generating agent markdown (`boot agent init` / `boot agent sync`), team conventions are merged into the single **Conventions** section with a `[team]` prefix so it's clear what comes from the team vs. the project.
 
 ## License
 

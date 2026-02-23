@@ -164,7 +164,7 @@ team:
   required: true
 ```
 
-Team conventions appear in a separate section in generated agent files, so it's clear what comes from the team vs. the project.
+Team conventions are merged into the conventions list with a `[team]` prefix, so it's clear what comes from the team vs. the project.
 
 ## Project Setup & Dev
 

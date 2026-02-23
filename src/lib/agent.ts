@@ -303,19 +303,6 @@ export function generateAgentMarkdown(
   );
   lines.push("");
 
-  // ── Existing project rules (from .cursorrules, AGENTS.md, etc.) ──
-  const existingFiles = loadExistingAgentFiles(cwd);
-  if (existingFiles.length > 0) {
-    lines.push("## Existing project rules");
-    lines.push("");
-    for (const { path: relPath, content } of existingFiles) {
-      lines.push(`### From \`${relPath}\``);
-      lines.push("");
-      lines.push(content);
-      lines.push("");
-    }
-  }
-
   // ── Project name ──
   lines.push(`# ${config.name}`);
   lines.push("");
@@ -367,21 +354,39 @@ export function generateAgentMarkdown(
     }
   }
 
-  // ── Commands ──
-  lines.push("## Commands");
+  // ── Tooling ──
+  lines.push("## Tooling");
   lines.push("");
-  lines.push("```bash");
-  lines.push(
-    "boot setup    # one-time: install deps, start DB, run migrations"
-  );
-  lines.push(
-    "boot dev      # start all services with live logs (Ctrl+C stops all)"
-  );
-  lines.push("boot up       # start all services in background");
-  lines.push("boot down     # stop all services");
-  lines.push("boot status   # show what's running");
-  lines.push("boot logs     # view service logs");
-  lines.push("```");
+  lines.push(`- **Package manager**: \`${pm}\``);
+  lines.push(`- **Setup**: \`boot setup\` (install deps, start services, run migrations)`);
+  lines.push(`- **Dev server**: \`boot dev\` (start all services with live logs)`);
+
+  const rootPkg = readPackageJson(cwd);
+
+  // Test runner
+  if (stack.includes("vitest")) {
+    lines.push(`- **Tests**: \`${pm} test\` (Vitest)`);
+  } else if (stack.includes("jest")) {
+    lines.push(`- **Tests**: \`${pm} test\` (Jest)`);
+  } else if (stack.includes("playwright")) {
+    lines.push(`- **Tests**: \`${pm} test\` (Playwright)`);
+  }
+
+  // Linter / formatter
+  if (rootPkg?.scripts?.lint) {
+    lines.push(`- **Lint**: \`${pm} lint\``);
+  }
+  if (rootPkg?.scripts?.format) {
+    lines.push(`- **Format**: \`${pm} format\``);
+  }
+
+  // DB migrations
+  if (stack.includes("prisma")) {
+    lines.push("- **DB migrate**: `npx prisma migrate dev`");
+  } else if (stack.includes("drizzle")) {
+    lines.push(`- **DB migrate**: \`${pm} drizzle-kit generate && ${pm} drizzle-kit migrate\``);
+  }
+
   lines.push("");
 
   // ── Environment ──
@@ -397,26 +402,23 @@ export function generateAgentMarkdown(
     lines.push("");
   }
 
-  // ── Team conventions (from team profile, labeled separately) ──
+  // ── Conventions (all sources merged into one flat list) ──
+  const allConventions: string[] = [];
   const includeTeam = options.includeTeam !== false;
+
+  // Team conventions (prefixed with [team])
   if (includeTeam) {
     const teamConfig = getTeamConfigSeparately(cwd);
-    if (teamConfig?.agent?.conventions && teamConfig.agent.conventions.length > 0) {
-      lines.push("## Team Conventions");
-      lines.push("");
+    if (teamConfig?.agent?.conventions) {
       for (const c of teamConfig.agent.conventions) {
-        lines.push(`- ${c}`);
+        allConventions.push(`[team] ${c}`);
       }
-      lines.push("");
     }
   }
 
-  // ── Project conventions (from boot.yaml) ──
-  // When a team profile is active, the merged config includes both team + project
-  // conventions. Filter out team conventions so they aren't duplicated.
+  // Project conventions (from boot.yaml, excluding team dupes)
   if (config.agent?.conventions && config.agent.conventions.length > 0) {
     let projectConventions = config.agent.conventions;
-
     if (includeTeam) {
       const teamConfig = getTeamConfigSeparately(cwd);
       if (teamConfig?.agent?.conventions) {
@@ -424,55 +426,32 @@ export function generateAgentMarkdown(
         projectConventions = projectConventions.filter((c) => !teamSet.has(c));
       }
     }
-
-    if (projectConventions.length > 0) {
-      lines.push("## Conventions");
-      lines.push("");
-      for (const c of projectConventions) {
-        lines.push(`- ${c}`);
-      }
-      lines.push("");
-    }
+    allConventions.push(...projectConventions);
   }
 
-  // ── Global sections ──
+  // Global conventions (personal + stack + remembered)
   if (includeGlobal) {
-    // Personal conventions
     const globalConv = loadGlobalConventions();
-    if (globalConv.length > 0) {
-      lines.push("## Personal Conventions");
-      lines.push("");
-      for (const c of globalConv) {
-        lines.push(`- ${c}`);
-      }
-      lines.push("");
-    }
+    allConventions.push(...globalConv);
 
-    // Stack-specific conventions from global store
-    const allStackConvs: string[] = [];
     for (const s of stack) {
       const convs = loadStackConventions(s);
-      allStackConvs.push(...convs);
-    }
-    if (allStackConvs.length > 0) {
-      lines.push("## Stack Conventions");
-      lines.push("");
-      for (const c of allStackConvs) {
-        lines.push(`- ${c}`);
-      }
-      lines.push("");
+      allConventions.push(...convs);
     }
 
-    // Remembered patterns
     const memory = loadGlobalMemory();
-    if (memory.length > 0) {
-      lines.push("## Remembered Patterns");
-      lines.push("");
-      for (const m of memory) {
-        lines.push(`- ${m}`);
-      }
-      lines.push("");
+    allConventions.push(...memory);
+  }
+
+  // Deduplicate and emit
+  const uniqueConventions = [...new Set(allConventions)];
+  if (uniqueConventions.length > 0) {
+    lines.push("## Conventions");
+    lines.push("");
+    for (const c of uniqueConventions) {
+      lines.push(`- ${c}`);
     }
+    lines.push("");
   }
 
   // ── Skills (detected from project) ──

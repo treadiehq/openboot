@@ -22,9 +22,10 @@ import { detectAgentFiles, DEFAULT_TARGETS } from "../lib/agent";
 export async function init(): Promise<void> {
   const cwd = process.cwd();
 
-  if (findConfig(cwd)) {
-    log.warn("boot.yaml already exists in this directory");
-    return;
+  const existingConfig = findConfig(cwd);
+  if (existingConfig) {
+    fs.unlinkSync(existingConfig);
+    log.info("Removed existing boot.yaml");
   }
 
   log.header("boot init");

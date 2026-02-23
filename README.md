@@ -2,7 +2,7 @@
 
 > One config for every AI coding tool. One command to start your whole stack.
 
-Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, `SKILL.md`, `copilot-instructions.md` — and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
+Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, `SKILL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
 
 Boot fixes this. It auto-detects your stack and generates agent context for Cursor, GitHub Copilot, OpenCode Claude Code, and Codex from one source. Your conventions follow you across projects. Your team's standards apply everywhere.
 
@@ -86,7 +86,7 @@ agent:
 
 ### Soul — AI Identity
 
-Define who the AI agent is in your project — its values, boundaries, and voice. Inspired by the [soul document](https://soul.md/) concept. Boot generates a `SOUL.md` when you add a `soul` section.
+Define who the AI agent is in your project, its values, boundaries, and voice. Inspired by the [soul document](https://soul.md/) concept. Boot generates a `SOUL.md` when you add a `soul` section.
 
 ```yaml
 agent:
@@ -148,7 +148,7 @@ Without `include`, Boot pulls the README. With `include`, you control exactly wh
 
 ## Team Profiles
 
-Share a company-wide baseline across every repo. The team profile lives in a git repo — conventions, env rules, setup commands — and Boot merges it under your project config.
+Share a company-wide baseline across every repo. The team profile lives in a git repo — conventions, env rules, setup commands, and Boot merges it under your project config.
 
 ```bash
 boot team set git@github.com:company/boot-standards.git
@@ -168,7 +168,7 @@ Team conventions are merged into the conventions list with a `[team]` prefix, so
 
 ## Project Setup & Dev
 
-Boot also orchestrates your entire dev environment — Docker, app processes, env validation, reverse proxy — from the same `boot.yaml`.
+Boot also orchestrates your entire dev environment. Docker, app processes, env validation, reverse proxy, from the same `boot.yaml`.
 
 ```bash
 boot init          # auto-detect stack, create boot.yaml
@@ -180,7 +180,7 @@ boot status        # show what's running
 boot logs api -f   # follow a service's logs
 ```
 
-Every app gets a stable `.localhost` URL on port 1355 — no more remembering port numbers:
+Every app gets a stable `.localhost` URL on port 1355. No more remembering port numbers:
 
 ```
 api  → http://api.localhost:1355
@@ -254,7 +254,7 @@ hub:
   targets: [.github, .forgejo]
 ```
 
-Both support `sync`, `check`, and `--overwrite` — same pattern as agent sync.
+Both support `sync`, `check`, and `--overwrite`, same pattern as agent sync.
 
 ## Docs
 

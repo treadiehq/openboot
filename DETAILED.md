@@ -242,7 +242,7 @@ hub:
 
 #### `boot up --attach` / `boot up -a`
 
-Same as `boot up` but after starting, streams all app logs to your terminal (color-coded by service). Press Ctrl+C to detach — services keep running in the background.
+Same as `boot up` but after starting, streams all app logs to your terminal (color-coded by service). Press Ctrl+C to detach. Services keep running in the background.
 
 ### `boot dev`
 
@@ -343,7 +343,7 @@ boot agent sync --overwrite  # replace existing agent files
 
 ### `boot agent check`
 
-Validate that target files are in sync with your config. Exits with code 1 if anything is stale or missing — use it in CI or as a pre-commit hook:
+Validate that target files are in sync with your config. Exits with code 1 if anything is stale or missing. Use it in CI or as a pre-commit hook:
 
 ```bash
 boot agent check
@@ -445,7 +445,7 @@ Boot generates three separate files, each serving a distinct purpose:
 
 ### Soul — AI Identity
 
-Inspired by the [soul document](https://soul.md/) concept. Define who the AI agent is in your project — not rules about what code to write, but identity, values, and how the agent relates to the team.
+Inspired by the [soul document](https://soul.md/) concept. Define who the AI agent is in your project, not rules about what code to write, but identity, values, and how the agent relates to the team.
 
 ```yaml
 agent:
@@ -516,7 +516,7 @@ agent:
 
 **Team skill syncing:** If your team profile repo contains a `skills/` directory, Boot copies those skill directories into your project's `skills/` directory during `boot agent init` and `boot agent sync`. Existing project skills are never overwritten — use `--overwrite` to replace them.
 
-Skills are human-authored capabilities — things like deploying to Cloudflare, managing GitHub issues, or running coding agents. They are not auto-generated task lists. See [agentskills.io](https://agentskills.io/) and [OpenClaw skills](https://github.com/openclaw/openclaw/tree/main/skills) for examples.
+Skills are human-authored capabilities, things like deploying to Cloudflare, managing GitHub issues, or running coding agents. They are not auto-generated task lists. See [agentskills.io](https://agentskills.io/) and [OpenClaw skills](https://github.com/openclaw/openclaw/tree/main/skills) for examples.
 
 ### References
 
@@ -545,7 +545,7 @@ agent:
 
 `include` accepts files and directories. Directories are walked recursively and all text files are included. This lets you pull in exactly the docs, types, or source your AI tools need.
 
-**Limits:** Individual files are capped at 15,000 characters, total content per reference at 50,000 characters. Binary files and `node_modules` are skipped. Team profiles can also define references — they get merged with project references (deduplicated by URL, project entries win).
+**Limits:** Individual files are capped at 15,000 characters, total content per reference at 50,000 characters. Binary files and `node_modules` are skipped. Team profiles can also define references, they get merged with project references (deduplicated by URL, project entries win).
 
 ### Stack Detection
 
@@ -609,9 +609,9 @@ The resolved port is persisted in `.boot/ports/` so `boot status` and `boot down
 
 ### Framework Port Injection
 
-Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ignore the `PORT` environment variable. When Boot detects one of these in your app command — either directly or by resolving the underlying script from `package.json` — it automatically appends the correct `--port` (and `--host` where needed) flags so the app listens on the port Boot assigned.
+Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ignore the `PORT` environment variable. When Boot detects one of these in your app command — either directly or by resolving the underlying script from `package.json`, it automatically appends the correct `--port` (and `--host` where needed) flags so the app listens on the port Boot assigned.
 
-This works for both explicit ports and `port: auto`. No config needed — Boot handles the detection and injection transparently.
+This works for both explicit ports and `port: auto`. No config needed. Boot handles the detection and injection transparently.
 
 ### `.localhost` Proxy
 
@@ -638,7 +638,7 @@ Add `.boot/` to your `.gitignore`.
 
 ## Editor Config
 
-Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`. One source, many targets — same philosophy as agent sync.
+Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`. One source, many targets, same philosophy as agent sync.
 
 ### Config
 
@@ -723,7 +723,7 @@ boot editor sync --overwrite   # overwrite existing editor config files
 
 ## Hub Config
 
-Boot syncs CI workflows from one source in `boot.yaml` to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Forgejo Actions uses GitHub Actions-compatible syntax, so the workflow content is the same — only the directory differs.
+Boot syncs CI workflows from one source in `boot.yaml` to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Forgejo Actions uses GitHub Actions-compatible syntax, so the workflow content is the same, only the directory differs.
 
 ### Config
 

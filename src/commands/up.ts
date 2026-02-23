@@ -9,7 +9,7 @@ import { log } from "../lib/log";
 import { BootConfig } from "../types";
 import { checkPrerequisites } from "../lib/prereqs";
 import { tailAllLogs } from "../lib/tail";
-import { startProxyBackground, PROXY_PORT } from "../lib/proxy";
+import { startProxyBackground } from "../lib/proxy";
 
 /**
  * `boot up` — start all services.
@@ -81,9 +81,9 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
   smartPrismaCheck(config, pm, projectRoot);
 
   // Start reverse proxy (background)
-  const proxyOk = startProxyBackground();
-  if (proxyOk) {
-    log.success(`Proxy listening on http://localhost:${PROXY_PORT}`);
+  const proxyPort = startProxyBackground();
+  if (proxyPort) {
+    log.success(`Proxy listening on http://localhost:${proxyPort}`);
   }
 
   // Start Docker services
@@ -116,8 +116,8 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
   if (config.apps) {
     for (const app of config.apps) {
       const port = typeof app.port === "number" ? app.port : null;
-      if (port && proxyOk) {
-        log.step(`${app.name}: http://${app.name}.localhost:${PROXY_PORT}`);
+      if (port && proxyPort) {
+        log.step(`${app.name}: http://${app.name}.localhost:${proxyPort}`);
       } else if (port) {
         log.step(`${app.name}: http://localhost:${port}`);
       } else {

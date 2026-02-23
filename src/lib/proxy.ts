@@ -12,8 +12,17 @@ const PID_FILE = path.join(PROXY_DIR, "proxy.pid");
 const LOG_FILE = path.join(PROXY_DIR, "proxy.log");
 
 export const PROXY_PORT = 1355;
+const MAX_PORT_ATTEMPTS = 10;
 
 let proxyServer: http.Server | null = null;
+
+function findAvailablePort(startPort: number): number {
+  for (let i = 0; i < MAX_PORT_ATTEMPTS; i++) {
+    const port = startPort + i;
+    if (!isPortInUse(port)) return port;
+  }
+  return 0;
+}
 
 // ---------------------------------------------------------------------------
 // Route persistence — shared by in-process and background proxy
@@ -301,19 +310,20 @@ function createProxyServer(proxyPort: number): http.Server {
 // In-process lifecycle (boot dev)
 // ---------------------------------------------------------------------------
 
-export function startProxy(port = PROXY_PORT): boolean {
-  if (isPortInUse(port)) {
-    log.warn(`Proxy port ${port} already in use — skipping proxy`);
-    return false;
+export function startProxy(port = PROXY_PORT): number {
+  const actualPort = findAvailablePort(port);
+  if (actualPort === 0) {
+    log.warn("No available port for proxy — falling back to direct ports");
+    return 0;
   }
 
   try {
-    proxyServer = createProxyServer(port);
-    proxyServer.listen(port, "127.0.0.1");
-    return true;
+    proxyServer = createProxyServer(actualPort);
+    proxyServer.listen(actualPort, "127.0.0.1");
+    return actualPort;
   } catch {
     log.warn("Failed to start proxy — falling back to direct ports");
-    return false;
+    return 0;
   }
 }
 
@@ -329,10 +339,11 @@ export function stopProxy(): void {
 // Background lifecycle (boot up)
 // ---------------------------------------------------------------------------
 
-export function startProxyBackground(port = PROXY_PORT): boolean {
-  if (isPortInUse(port)) {
-    log.warn(`Proxy port ${port} already in use — skipping proxy`);
-    return false;
+export function startProxyBackground(port = PROXY_PORT): number {
+  const actualPort = findAvailablePort(port);
+  if (actualPort === 0) {
+    log.warn("No available port for proxy — falling back to direct ports");
+    return 0;
   }
 
   fs.mkdirSync(PROXY_DIR, { recursive: true });
@@ -345,7 +356,7 @@ export function startProxyBackground(port = PROXY_PORT): boolean {
     process.execPath,
     [
       "-e",
-      `require(${JSON.stringify(modulePath)}).runStandalone(${port}, ${JSON.stringify(routesPath)})`,
+      `require(${JSON.stringify(modulePath)}).runStandalone(${actualPort}, ${JSON.stringify(routesPath)})`,
     ],
     {
       detached: true,
@@ -358,9 +369,9 @@ export function startProxyBackground(port = PROXY_PORT): boolean {
 
   if (child.pid) {
     fs.writeFileSync(PID_FILE, String(child.pid));
-    return true;
+    return actualPort;
   }
-  return false;
+  return 0;
 }
 
 export function stopProxyBackground(): void {

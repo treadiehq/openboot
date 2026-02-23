@@ -282,10 +282,11 @@ export async function init(): Promise<void> {
     }
   }
 
-  // Add default agent section so `boot agent sync` works out of the box
-  config.agent = {
-    targets: DEFAULT_TARGETS,
-  };
+  if (agentFiles.length > 0) {
+    config.agent = {
+      targets: DEFAULT_TARGETS,
+    };
+  }
 
   // --- Detect editor tasks ---
   const editorTasks = detectEditorTasks(cwd, config);

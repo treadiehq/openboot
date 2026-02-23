@@ -17,17 +17,15 @@ const CI_SCRIPTS = ["lint", "test", "build", "typecheck", "type-check", "check"]
  */
 export function detectCISteps(cwd: string, config?: BootConfig): HubCIStep[] {
   const pm = config?.packageManager || detectPackageManager(cwd);
-  const steps: HubCIStep[] = [];
+  const ciSteps: HubCIStep[] = [];
   const seen = new Set<string>();
-
-  steps.push({ name: "Install", run: `${pm} install` });
 
   const rootPkg = readPackageJson(cwd);
   if (rootPkg?.scripts) {
     for (const script of CI_SCRIPTS) {
       if (rootPkg.scripts[script] && !seen.has(script)) {
         seen.add(script);
-        steps.push({
+        ciSteps.push({
           name: capitalize(script),
           run: pmRun(pm, script),
         });
@@ -35,7 +33,9 @@ export function detectCISteps(cwd: string, config?: BootConfig): HubCIStep[] {
     }
   }
 
-  return steps;
+  if (ciSteps.length === 0) return [];
+
+  return [{ name: "Install", run: `${pm} install` }, ...ciSteps];
 }
 
 /**

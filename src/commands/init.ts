@@ -163,7 +163,7 @@ export async function init(): Promise<void> {
         command: devCommand(pm, hasDevScript),
       };
 
-      const port = readPortFromEnv(appPath) || guessPort(dir);
+      const port = readPortFromEnv(appPath) || readPortFromFrameworkConfig(appPath) || guessPort(dir);
       if (port) app.port = port;
 
       config.apps!.push(app);
@@ -201,7 +201,7 @@ export async function init(): Promise<void> {
           command: devCommand(pm, hasDevScript),
         };
 
-        const port = readPortFromEnv(fullPath) || guessPort(dir);
+        const port = readPortFromEnv(fullPath) || readPortFromFrameworkConfig(fullPath) || guessPort(dir);
         if (port) app.port = port;
 
         config.apps!.push(app);
@@ -226,8 +226,7 @@ export async function init(): Promise<void> {
       pkg.main;
 
     if ((hasDevScript || hasStartScript) && isRealApp) {
-      // Read PORT from .env if available — that's what the app actually uses
-      let rootPort = readPortFromEnv(cwd) || 3000;
+      let rootPort = readPortFromEnv(cwd) || readPortFromFrameworkConfig(cwd) || 3000;
 
       // If a sub-app already claimed this port, bump the sub-app instead
       const conflictApp = config.apps!.find((a) => a.port === rootPort);
@@ -247,7 +246,7 @@ export async function init(): Promise<void> {
       log.success(`Found root app: ${projectName}`);
     } else if (config.apps!.length === 0 && (hasDevScript || hasStartScript)) {
       // Fallback: no sub-apps and no src/, but has scripts — still treat as single app
-      const rootPort = readPortFromEnv(cwd) || 3000;
+      const rootPort = readPortFromEnv(cwd) || readPortFromFrameworkConfig(cwd) || 3000;
       config.apps!.push({
         name: projectName,
         command: devCommand(pm, hasDevScript),
@@ -616,6 +615,29 @@ function readPortFromEnv(cwd: string): number | null {
     const match = trimmed.match(/^PORT\s*=\s*(\d+)/);
     if (match) return parseInt(match[1], 10);
   }
+  return null;
+}
+
+/**
+ * Read the dev server port from framework config files
+ * (astro.config.*, vite.config.*, nuxt.config.*).
+ */
+function readPortFromFrameworkConfig(cwd: string): number | null {
+  const configFiles = [
+    "astro.config.mjs", "astro.config.ts", "astro.config.js",
+    "vite.config.mjs", "vite.config.ts", "vite.config.js",
+    "nuxt.config.ts", "nuxt.config.js",
+  ];
+
+  for (const file of configFiles) {
+    const filePath = path.join(cwd, file);
+    if (!fs.existsSync(filePath)) continue;
+
+    const content = fs.readFileSync(filePath, "utf-8");
+    const match = content.match(/port\s*:\s*(\d+)/);
+    if (match) return parseInt(match[1], 10);
+  }
+
   return null;
 }
 

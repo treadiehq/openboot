@@ -9,7 +9,7 @@ import {
   formatStackName,
   generateAgentMarkdown,
   generateSoulMarkdown,
-  generateSkillMarkdown,
+  generateSkillFiles,
   syncTargets,
   checkSync,
   getOrDetectConfig,
@@ -91,12 +91,12 @@ export function registerAgentCommands(program: Command): void {
           includeGlobal: opts.global,
         });
         const soulMarkdown = generateSoulMarkdown(config, cwd);
-        const skillMarkdown = generateSkillMarkdown(config, cwd);
+        const skillFiles = generateSkillFiles(config, cwd);
 
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
           soulMarkdown,
-          skillMarkdown,
+          skillFiles,
         });
 
         log.blank();
@@ -137,12 +137,12 @@ export function registerAgentCommands(program: Command): void {
           includeGlobal: opts.global,
         });
         const soulMarkdown = generateSoulMarkdown(config, cwd);
-        const skillMarkdown = generateSkillMarkdown(config, cwd);
+        const skillFiles = generateSkillFiles(config, cwd);
 
         const { written, skipped } = syncTargets(config, markdown, cwd, {
           overwrite: opts.overwrite,
           soulMarkdown,
-          skillMarkdown,
+          skillFiles,
         });
 
         for (const file of written) {

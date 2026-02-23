@@ -13,7 +13,8 @@ npx openboot agent init
 # ✓ Wrote AGENTS.md
 # ✓ Wrote CLAUDE.md
 # ✓ Wrote .github/copilot-instructions.md
-# ✓ Wrote SKILL.md
+# ✓ Wrote skills/setup.md
+# ✓ Wrote skills/run-tests.md
 ```
 
 No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, soul, skills, or team profiles.
@@ -105,7 +106,18 @@ agent:
 
 ### Skills — Project Workflows
 
-Define step-by-step workflows for common tasks. Boot auto-generates skills from your stack (setup, testing, migrations) and merges your custom ones. A `SKILL.md` is always generated, no config needed for auto-detected skills.
+Define step-by-step workflows for common tasks. Boot generates a `skills/` directory with one file per skill. It auto-generates skills from your stack (setup, testing, migrations) and merges your custom ones — no config needed for auto-detected skills.
+
+```
+skills/
+├── setup.md              (auto-generated)
+├── development.md        (auto-generated)
+├── run-tests.md          (auto-generated)
+├── database-migration.md (auto-generated)
+├── add-api-endpoint.md   (from boot.yaml)
+```
+
+Add custom skills in `boot.yaml`:
 
 ```yaml
 agent:
@@ -117,6 +129,8 @@ agent:
         - Register route in apps/api/src/index.ts
         - Add tests
 ```
+
+Existing skill files are never overwritten — Boot only adds new ones. Use `--overwrite` to regenerate auto-generated skills.
 
 ### References
 

@@ -431,7 +431,7 @@ Boot generates three separate files, each serving a distinct purpose:
 |---|---|---|
 | `.cursorrules` / `AGENTS.md` / `CLAUDE.md` / `copilot-instructions.md` | Project context — stack, structure, conventions | Always |
 | `SOUL.md` | AI identity — role, values, boundaries, voice | When `agent.soul` is defined |
-| `SKILL.md` | Workflows — step-by-step procedures for common tasks | Always (auto-detected skills + user-defined) |
+| `skills/` directory | Workflows — one file per skill, step-by-step procedures | Always (auto-detected skills + user-defined) |
 
 **Agent context** (`.cursorrules`, etc.) includes:
 
@@ -480,7 +480,7 @@ Team profiles can define soul fields. Identity uses project if set, else team. V
 
 ### Skills — Project Workflows
 
-Define step-by-step workflows that teach AI agents how to perform common tasks in your project.
+Boot generates a `skills/` directory with one file per skill. Each skill is a standalone markdown document with a name and numbered steps.
 
 ```yaml
 agent:
@@ -497,6 +497,19 @@ agent:
         - Run pnpm deploy
 ```
 
+**Generated structure:**
+
+```
+skills/
+├── setup.md              (auto-generated)
+├── development.md        (auto-generated)
+├── run-tests.md          (auto-generated)
+├── database-migration.md (auto-generated)
+├── lint.md               (auto-generated)
+├── add-api-endpoint.md   (from boot.yaml)
+├── deploy.md             (from boot.yaml)
+```
+
 Boot auto-generates skills from your project stack with zero config:
 
 - **Setup** — from `setup` commands + env requirements
@@ -504,6 +517,8 @@ Boot auto-generates skills from your project stack with zero config:
 - **Run Tests** — if Vitest/Jest/Playwright detected
 - **Database Migration** — if Prisma/Drizzle detected
 - **Lint / Format** — if lint/format scripts detected in package.json
+
+**Append behavior:** Existing skill files are never overwritten — Boot only adds new ones that don't exist yet. Use `--overwrite` to regenerate auto-generated skills. Hand-written skill files you add to the directory are always preserved.
 
 User-defined skills override auto-generated ones with the same name. Team profile skills are merged in (project wins per-skill by name).
 

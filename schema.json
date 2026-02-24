@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://openboot.dev/schema.json",
   "title": "boot.yaml",
-  "description": "Configuration file for openboot, thedev stack lifecycle manager and AI agent context sync.",
+  "description": "Configuration file for openboot. The dev stack lifecycle manager and AI agent context sync.",
   "type": "object",
   "properties": {
     "name": {
@@ -46,7 +46,7 @@
     },
     "docker": {
       "type": "object",
-      "description": "Docker services — compose-based or standalone containers.",
+      "description": "Docker services. Compose-based or standalone containers.",
       "properties": {
         "composeFile": {
           "type": "string",
@@ -187,12 +187,12 @@
         },
         "references": {
           "type": "array",
-          "description": "Git repos to clone as AI context. String (URL) or object with url + include paths.",
+          "description": "Git repos to clone as AI context. String (URL) or object with url and include paths.",
           "items": {
             "oneOf": [
               {
                 "type": "string",
-                "description": "Git URL — includes the repo's README."
+                "description": "Git URL. Includes the repo's README."
               },
               {
                 "type": "object",
@@ -215,7 +215,7 @@
         },
         "soul": {
           "type": "object",
-          "description": "AI identity — who the agent is in this project (generates SOUL.md).",
+          "description": "AI identity. Who the agent is in this project (generates SOUL.md).",
           "properties": {
             "identity": {
               "type": "string",
@@ -376,7 +376,7 @@
     },
     "team": {
       "type": "object",
-      "description": "Team / company profile — shared config synced from a git repo.",
+      "description": "Team / company profile. Shared config synced from a git repo.",
       "required": ["url"],
       "properties": {
         "url": {

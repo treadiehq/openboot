@@ -1,6 +1,6 @@
 {
   "name": "openboot",
-  "version": "0.2.12",
+  "version": "0.2.13",
   "description": "One config for every AI coding tool. One command to start your whole stack.",
   "author": "Treadie, Inc.",
   "license": "FSL-1.1-MIT",
@@ -8,7 +8,8 @@
     "boot": "./dist/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "schema.json"
   ],
   "scripts": {
     "build": "tsc",

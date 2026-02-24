@@ -258,7 +258,7 @@ Both support `sync`, `check`, and `--overwrite`, same pattern as agent sync.
 
 ## Programmatic Integration
 
-`boot status --json`, `boot agent status --json`, and `boot config` output structured JSON for editors and tools that want to integrate Boot programmatically.
+A [JSON Schema](schema.json) for `boot.yaml` is included for editor autocomplete and validation. `boot status --json`, `boot agent status --json`, and `boot config` output structured JSON for tools that want to integrate Boot programmatically.
 
 ## Docs
 

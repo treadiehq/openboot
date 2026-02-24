@@ -919,6 +919,15 @@ When generating agent markdown (`boot agent init` / `boot agent sync`), team con
 
 Boot exposes machine-readable JSON output for editors, GUIs, and other tools that want to integrate.
 
+### JSON Schema
+
+A JSON Schema for `boot.yaml` is published at [`schema.json`](schema.json) and included in the npm package. Point your editor at it for autocomplete and validation:
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/treadiehq/openboot/main/schema.json
+name: my-project
+```
+
 ### `boot config`
 
 Dumps the fully resolved project config (with team profile merged) as JSON:

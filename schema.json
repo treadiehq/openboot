@@ -1,0 +1,401 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://openboot.dev/schema.json",
+  "title": "boot.yaml",
+  "description": "Configuration file for openboot, thedev stack lifecycle manager and AI agent context sync.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Project name (display only, defaults to directory name)."
+    },
+    "packageManager": {
+      "type": "string",
+      "enum": ["pnpm", "npm", "yarn"],
+      "description": "Package manager override. Auto-detected from lockfiles if omitted."
+    },
+    "env": {
+      "type": "object",
+      "description": "Environment file validation.",
+      "properties": {
+        "file": {
+          "type": "string",
+          "description": "Path to .env file.",
+          "default": ".env"
+        },
+        "required": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Environment variables that must be set — boot up fails if missing."
+        },
+        "reject": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "description": "Values to reject per key (blocks example/default secrets)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "setup": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Commands to run on `boot setup` (one-time: install deps, run migrations)."
+    },
+    "docker": {
+      "type": "object",
+      "description": "Docker services — compose-based or standalone containers.",
+      "properties": {
+        "composeFile": {
+          "type": "string",
+          "description": "Path to compose file.",
+          "default": "docker-compose.yml"
+        },
+        "services": {
+          "type": "array",
+          "description": "Services managed via docker compose.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Compose service name."
+              },
+              "container": {
+                "type": "string",
+                "description": "Container name for docker exec (defaults to name)."
+              },
+              "readyCheck": {
+                "type": "string",
+                "description": "Command to run inside container to check readiness."
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Seconds to wait for readiness.",
+                "default": 30
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "containers": {
+          "type": "array",
+          "description": "Standalone containers managed via docker run/start (no compose needed).",
+          "items": {
+            "type": "object",
+            "required": ["name", "image"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Container name."
+              },
+              "image": {
+                "type": "string",
+                "description": "Docker image (e.g. postgres:15)."
+              },
+              "ports": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Port mappings (e.g. \"5433:5432\")."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": { "type": "string" },
+                "description": "Environment variables for the container."
+              },
+              "volumes": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Volume mounts."
+              },
+              "readyCheck": {
+                "type": "string",
+                "description": "Command to run inside container to check readiness."
+              },
+              "timeout": {
+                "type": "number",
+                "description": "Seconds to wait for readiness.",
+                "default": 30
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "apps": {
+      "type": "array",
+      "description": "Application processes managed by boot.",
+      "items": {
+        "type": "object",
+        "required": ["name", "command"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "App name (used for display, PID files, log files)."
+          },
+          "path": {
+            "type": "string",
+            "description": "Working directory relative to project root."
+          },
+          "command": {
+            "type": "string",
+            "description": "Command to start the app."
+          },
+          "port": {
+            "oneOf": [
+              { "type": "number" },
+              { "type": "string", "const": "auto" }
+            ],
+            "description": "Port the app listens on. Set to \"auto\" to assign a free port dynamically (range 4000–4999)."
+          },
+          "health": {
+            "type": "string",
+            "description": "URL to poll for health check."
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Extra environment variables."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "agent": {
+      "type": "object",
+      "description": "AI agent context configuration.",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Project description included in AI agent context."
+        },
+        "conventions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Coding conventions for AI agents to follow."
+        },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Files to write agent context to.",
+          "default": [".cursorrules", "AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md"]
+        },
+        "references": {
+          "type": "array",
+          "description": "Git repos to clone as AI context. String (URL) or object with url + include paths.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Git URL — includes the repo's README."
+              },
+              {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "Git URL (SSH or HTTPS)."
+                  },
+                  "include": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "Paths to include from the repo (files or directories)."
+                  }
+                },
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "soul": {
+          "type": "object",
+          "description": "AI identity — who the agent is in this project (generates SOUL.md).",
+          "properties": {
+            "identity": {
+              "type": "string",
+              "description": "Freeform paragraph defining who the agent is."
+            },
+            "values": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Core values the agent should prioritize."
+            },
+            "boundaries": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Hard limits on agent behavior."
+            },
+            "voice": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Communication style guidelines."
+            }
+          },
+          "additionalProperties": false
+        },
+        "skills": {
+          "type": "object",
+          "description": "Skill detection and syncing config.",
+          "properties": {
+            "paths": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Additional directories to scan for SKILL.md files."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "editor": {
+      "type": "object",
+      "description": "Editor config sync (.vscode, .zed).",
+      "properties": {
+        "tasks": {
+          "type": "array",
+          "description": "Tasks to sync to editor-specific formats.",
+          "items": {
+            "type": "object",
+            "required": ["name", "command"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Task label shown in the editor."
+              },
+              "command": {
+                "type": "string",
+                "description": "Shell command to run."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory relative to project root."
+              },
+              "group": {
+                "type": "string",
+                "enum": ["build", "test"],
+                "description": "Task group."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Editor directories to write to.",
+          "default": [".vscode", ".zed"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "hub": {
+      "type": "object",
+      "description": "Code hub config sync (.github, .forgejo).",
+      "properties": {
+        "ci": {
+          "type": "object",
+          "description": "CI workflow configuration.",
+          "properties": {
+            "on": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Trigger events.",
+              "default": ["push", "pull_request"]
+            },
+            "node": {
+              "type": "string",
+              "description": "Node.js version (auto-detected from .nvmrc/engines if omitted)."
+            },
+            "steps": {
+              "type": "array",
+              "description": "CI steps to run after checkout and setup.",
+              "items": {
+                "type": "object",
+                "required": ["name", "run"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Step display name."
+                  },
+                  "run": {
+                    "type": "string",
+                    "description": "Shell command to run."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "prTemplate": {
+          "type": "object",
+          "description": "PR template configuration.",
+          "properties": {
+            "sections": {
+              "type": "array",
+              "description": "Sections to include in the PR template.",
+              "items": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "Section heading."
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Hint shown as an HTML comment under the heading."
+                  },
+                  "optional": {
+                    "type": "boolean",
+                    "description": "If true, the section heading includes \"(optional)\"."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hub directories to write to.",
+          "default": [".github", ".forgejo"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "team": {
+      "type": "object",
+      "description": "Team / company profile — shared config synced from a git repo.",
+      "required": ["url"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Git URL (SSH or HTTPS) of the team profile repo."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "If true, Boot refuses to run when the team profile can't be resolved.",
+          "default": false
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch to track.",
+          "default": "main"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

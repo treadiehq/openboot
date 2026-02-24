@@ -97,11 +97,27 @@ program
   });
 
 program
+  .command("config")
+  .description("Show resolved project config as JSON")
+  .option("--raw", "Show raw project config without team profile merge")
+  .action(async (opts) => {
+    try {
+      const { loadConfig, loadProjectConfig } = require("./lib/config");
+      const config = opts.raw ? loadProjectConfig() : loadConfig();
+      console.log(JSON.stringify(config, null, 2));
+    } catch (err: any) {
+      console.error(err.message);
+      process.exit(1);
+    }
+  });
+
+program
   .command("status")
   .description("Show status of all services")
-  .action(async () => {
+  .option("--json", "Output machine-readable JSON")
+  .action(async (opts) => {
     try {
-      await status();
+      await status(opts);
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

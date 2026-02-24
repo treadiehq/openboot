@@ -256,6 +256,10 @@ hub:
 
 Both support `sync`, `check`, and `--overwrite`, same pattern as agent sync.
 
+## Programmatic Integration
+
+`boot status --json`, `boot agent status --json`, and `boot config` output structured JSON for editors and tools that want to integrate Boot programmatically.
+
 ## Docs
 
 See [DETAILED.md](DETAILED.md) for the full config reference, auto-detection list, and command details.

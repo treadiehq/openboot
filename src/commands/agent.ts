@@ -270,29 +270,66 @@ export function registerAgentCommands(program: Command): void {
   agent
     .command("status")
     .description("Show agent context status for this project")
-    .action(async () => {
+    .option("--json", "Output machine-readable JSON")
+    .action(async (opts) => {
       try {
         const cwd = process.cwd();
+
+        const stack = detectStack(cwd);
+        const files = detectAgentFiles(cwd);
+        const configPath = findConfig(cwd);
+        const globalConv = loadGlobalConventions();
+        const globalMem = loadGlobalMemory();
+
+        let agentSection: any = null;
+        let skills: Array<{ name: string; description: string; path: string }> = [];
+        let syncStatus: { ok: string[]; stale: string[]; missing: string[] } | null = null;
+
+        if (configPath) {
+          const config = loadConfig(cwd);
+          if (config.agent) {
+            agentSection = {
+              description: config.agent.description || null,
+              conventions: config.agent.conventions || [],
+              targets: config.agent.targets || [],
+              soul: config.agent.soul || null,
+            };
+            skills = detectSkills(cwd, config.agent.skills?.paths);
+          }
+          syncStatus = checkSync(config, cwd);
+        }
+
+        if (opts.json) {
+          const result = {
+            stack: stack.map(formatStackName),
+            agentFiles: files,
+            hasConfig: !!configPath,
+            agent: agentSection,
+            skills: skills.map((s) => ({ name: s.name, description: s.description, path: s.path })),
+            global: {
+              conventions: globalConv,
+              remembered: globalMem,
+            },
+            sync: syncStatus,
+          };
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
         log.header("boot agent status");
 
-        // Stack
-        const stack = detectStack(cwd);
         if (stack.length > 0) {
           log.info(`Stack: ${stack.map(formatStackName).join(", ")}`);
         } else {
           log.info("Stack: (none detected)");
         }
 
-        // Existing agent files
-        const files = detectAgentFiles(cwd);
         if (files.length > 0) {
           log.info(`Agent files: ${files.join(", ")}`);
         } else {
           log.info("Agent files: (none found)");
         }
 
-        // Config status
-        const configPath = findConfig(cwd);
         if (configPath) {
           const config = loadConfig(cwd);
           if (config.agent) {
@@ -315,9 +352,9 @@ export function registerAgentCommands(program: Command): void {
               if (config.agent.soul.voice?.length) soulFields.push(`${config.agent.soul.voice.length} voice guidelines`);
               log.step(`  Soul: ${soulFields.join(", ")}`);
             }
-            const skills = detectSkills(cwd, config.agent.skills?.paths);
-            if (skills.length > 0) {
-              log.step(`  Skills: ${skills.length} detected (${skills.map((s) => s.name).join(", ")})`);
+            const detectedSkills = detectSkills(cwd, config.agent.skills?.paths);
+            if (detectedSkills.length > 0) {
+              log.step(`  Skills: ${detectedSkills.length} detected (${detectedSkills.map((s) => s.name).join(", ")})`);
             }
           } else {
             log.info(
@@ -328,9 +365,6 @@ export function registerAgentCommands(program: Command): void {
           log.info("Config: no boot.yaml (run `boot init` first)");
         }
 
-        // Global store
-        const globalConv = loadGlobalConventions();
-        const globalMem = loadGlobalMemory();
         log.info(
           `Global: ${globalConv.length} conventions, ${globalMem.length} remembered patterns`
         );
@@ -338,22 +372,19 @@ export function registerAgentCommands(program: Command): void {
           log.step(`  Location: ${AGENT_HOME}`);
         }
 
-        // Sync status
-        if (configPath) {
-          const config = loadConfig(cwd);
-          const sync = checkSync(config, cwd);
+        if (syncStatus) {
           log.blank();
-          if (sync.ok.length > 0) {
-            log.success(`${sync.ok.length} target(s) in sync`);
+          if (syncStatus.ok.length > 0) {
+            log.success(`${syncStatus.ok.length} target(s) in sync`);
           }
-          if (sync.stale.length > 0) {
+          if (syncStatus.stale.length > 0) {
             log.warn(
-              `${sync.stale.length} target(s) out of date — run \`boot agent sync\``
+              `${syncStatus.stale.length} target(s) out of date — run \`boot agent sync\``
             );
           }
-          if (sync.missing.length > 0) {
+          if (syncStatus.missing.length > 0) {
             log.warn(
-              `${sync.missing.length} target(s) missing — run \`boot agent sync\``
+              `${syncStatus.missing.length} target(s) missing — run \`boot agent sync\``
             );
           }
         }

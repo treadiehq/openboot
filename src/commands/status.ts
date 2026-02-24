@@ -12,23 +12,35 @@ const RED = "\x1b[31m";
 const YELLOW = "\x1b[33m";
 const RESET = "\x1b[0m";
 
+export interface ServiceStatus {
+  name: string;
+  type: "docker" | "app";
+  status: "running" | "stopped" | "port_in_use" | "not_found" | "unknown";
+  port: number | null;
+  url: string | null;
+  pid: number | null;
+  portPid: number | null;
+  process: string | null;
+  health: "ok" | "connected" | "failing" | "no_response" | null;
+  logFile: string | null;
+}
+
+export interface StatusResult {
+  project: string;
+  proxy: boolean;
+  services: ServiceStatus[];
+}
+
 /**
- * `boot status` — show what's running, with health checks and PID mismatch warnings.
+ * Collect structured status for all services (used by both human and JSON output).
  */
-export async function status(): Promise<void> {
+export function collectStatus(): StatusResult {
   const config = loadConfig();
-
-  log.header(`${config.name} — status`);
-
   const proxyUp = isProxyRunning() || isPortInUse(PROXY_PORT);
+  const services: ServiceStatus[] = [];
 
-  const rows: string[][] = [];
-  rows.push(["SERVICE", "STATUS", "URL", "PID", "PROCESS", "HEALTH", "LOG"]);
-
-  // Docker services / containers
   if (config.docker) {
     const dockerStatuses = getDockerStatus(config);
-    // Collect readyCheck info for DB connection testing
     const readyChecks = new Map<string, { container: string; check: string }>();
     if (config.docker.services) {
       for (const svc of config.docker.services) {
@@ -52,90 +64,151 @@ export async function status(): Promise<void> {
     }
 
     for (const svc of dockerStatuses) {
-      const statusColor =
-        svc.status === "running"
-          ? `${GREEN}running${RESET}`
-          : svc.status === "not found"
-            ? `${RED}not found${RESET}`
-            : `${YELLOW}${svc.status}${RESET}`;
-
-      // DB connection test for running containers with readyCheck
-      let healthStr = "—";
+      let health: ServiceStatus["health"] = null;
       if (svc.status === "running") {
         const checkInfo = readyChecks.get(svc.name);
         if (checkInfo) {
-          healthStr = testContainerHealth(checkInfo.container, checkInfo.check)
-            ? `${GREEN}connected${RESET}`
-            : `${RED}failing${RESET}`;
+          health = testContainerHealth(checkInfo.container, checkInfo.check)
+            ? "connected"
+            : "failing";
         } else {
-          healthStr = `${GREEN}ok${RESET}`;
+          health = "ok";
         }
       }
 
-      rows.push([svc.name, statusColor, svc.ports || "—", "—", "docker", healthStr, "—"]);
+      services.push({
+        name: svc.name,
+        type: "docker",
+        status: svc.status === "running" ? "running"
+          : svc.status === "not found" ? "not_found"
+          : "unknown",
+        port: null,
+        url: svc.ports || null,
+        pid: null,
+        portPid: null,
+        process: "docker",
+        health,
+        logFile: null,
+      });
     }
 
     if (dockerStatuses.length === 0 && config.docker.services) {
       for (const svc of config.docker.services) {
-        rows.push([svc.name, `${YELLOW}unknown${RESET}`, "—", "—", "—", "—", "—"]);
+        services.push({
+          name: svc.name,
+          type: "docker",
+          status: "unknown",
+          port: null,
+          url: null,
+          pid: null,
+          portPid: null,
+          process: null,
+          health: null,
+          logFile: null,
+        });
       }
     }
   }
 
-  // App processes
   if (config.apps) {
     for (const app of config.apps) {
       const { running, pid, portPid, resolvedPort } = getAppStatus(app);
-      const portStr = resolvedPort
-        ? proxyUp
-          ? `${app.name}.localhost:${PROXY_PORT}`
-          : String(resolvedPort)
-        : "—";
       const lf = logFile(app.name);
       const hasLog = fs.existsSync(lf);
 
-      // Status
-      let statusStr: string;
+      let appStatus: ServiceStatus["status"];
       if (running) {
-        statusStr = `${GREEN}running${RESET}`;
+        appStatus = "running";
       } else if (resolvedPort && isPortInUse(resolvedPort)) {
-        statusStr = `${YELLOW}port in use${RESET}`;
+        appStatus = "port_in_use";
       } else {
-        statusStr = `${RED}stopped${RESET}`;
+        appStatus = "stopped";
       }
 
-      // PID display + mismatch warning
-      let pidStr = pid ? String(pid) : "—";
-      if (pid && portPid && pid !== portPid) {
-        pidStr += ` ${YELLOW}(port PID: ${portPid})${RESET}`;
-      }
-
-      // Health check (curl the health URL if app is running)
-      let healthStr = "—";
+      let health: ServiceStatus["health"] = null;
       if (running && app.health) {
-        healthStr = checkHealth(app.health)
-          ? `${GREEN}ok${RESET}`
-          : `${RED}failing${RESET}`;
+        health = checkHealth(app.health) ? "ok" : "failing";
       } else if (running && resolvedPort) {
-        healthStr = checkHealth(`http://localhost:${resolvedPort}`)
-          ? `${GREEN}ok${RESET}`
-          : `${YELLOW}no response${RESET}`;
+        health = checkHealth(`http://localhost:${resolvedPort}`)
+          ? "ok"
+          : "no_response";
       }
 
-      // Process name (what binary is actually running)
       const activePid = portPid || pid;
-      const processName = activePid ? getProcessName(activePid) : "—";
+      const processName = activePid ? getProcessName(activePid) : null;
 
-      rows.push([
-        app.name,
-        statusStr,
-        portStr,
-        pidStr,
-        processName,
-        healthStr,
-        hasLog ? lf : "—",
-      ]);
+      const url = resolvedPort
+        ? proxyUp
+          ? `${app.name}.localhost:${PROXY_PORT}`
+          : `localhost:${resolvedPort}`
+        : null;
+
+      services.push({
+        name: app.name,
+        type: "app",
+        status: appStatus,
+        port: resolvedPort,
+        url,
+        pid: pid,
+        portPid: pid && portPid && pid !== portPid ? portPid : null,
+        process: processName,
+        health,
+        logFile: hasLog ? lf : null,
+      });
     }
+  }
+
+  return { project: config.name, proxy: proxyUp, services };
+}
+
+/**
+ * `boot status` — show what's running, with health checks and PID mismatch warnings.
+ */
+export async function status(opts?: { json?: boolean }): Promise<void> {
+  const result = collectStatus();
+
+  if (opts?.json) {
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
+
+  log.header(`${result.project} — status`);
+
+  const rows: string[][] = [];
+  rows.push(["SERVICE", "STATUS", "URL", "PID", "PROCESS", "HEALTH", "LOG"]);
+
+  for (const svc of result.services) {
+    const statusColor =
+      svc.status === "running"
+        ? `${GREEN}running${RESET}`
+        : svc.status === "not_found"
+          ? `${RED}not found${RESET}`
+          : svc.status === "stopped"
+            ? `${RED}stopped${RESET}`
+            : svc.status === "port_in_use"
+              ? `${YELLOW}port in use${RESET}`
+              : `${YELLOW}${svc.status}${RESET}`;
+
+    const healthStr = svc.health === "ok" ? `${GREEN}ok${RESET}`
+      : svc.health === "connected" ? `${GREEN}connected${RESET}`
+      : svc.health === "failing" ? `${RED}failing${RESET}`
+      : svc.health === "no_response" ? `${YELLOW}no response${RESET}`
+      : "—";
+
+    let pidStr = svc.pid ? String(svc.pid) : "—";
+    if (svc.portPid) {
+      pidStr += ` ${YELLOW}(port PID: ${svc.portPid})${RESET}`;
+    }
+
+    rows.push([
+      svc.name,
+      statusColor,
+      svc.url || "—",
+      pidStr,
+      svc.process || "—",
+      healthStr,
+      svc.logFile || "—",
+    ]);
   }
 
   log.table(rows);

@@ -273,6 +273,8 @@ Shows a table of all services with:
 - Live health checks (curl for apps, `pg_isready` / `redis-cli ping` for DBs)
 - Log file paths
 
+Pass `--json` for machine-readable output (useful for editor/tool integrations).
+
 ### `boot clean`
 
 Nukes everything for a fresh start:
@@ -387,6 +389,8 @@ boot agent status
 # ▶ Global: 3 conventions, 3 remembered patterns
 # ✓ 4 target(s) in sync
 ```
+
+Pass `--json` for machine-readable output.
 
 ### Cross-Project Transfer
 
@@ -910,6 +914,28 @@ Add `boot team check` to your CI pipeline to verify the team profile is applied:
 ### Agent Context
 
 When generating agent markdown (`boot agent init` / `boot agent sync`), team conventions are merged into the single **Conventions** section with a `[team]` prefix so it's clear what comes from the team vs. the project.
+
+## Programmatic / Tool Integration
+
+Boot exposes machine-readable JSON output for editors, GUIs, and other tools that want to integrate.
+
+### `boot config`
+
+Dumps the fully resolved project config (with team profile merged) as JSON:
+
+```bash
+boot config            # resolved config (team + project merged)
+boot config --raw      # project config only (no team merge)
+```
+
+### `--json` flag
+
+`boot status` and `boot agent status` accept `--json` for structured output:
+
+```bash
+boot status --json          # service status (type, port, health, pid, url)
+boot agent status --json    # stack, agent files, conventions, sync status
+```
 
 ## License
 

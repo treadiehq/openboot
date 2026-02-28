@@ -91,9 +91,13 @@ export function generateCIWorkflow(ci: HubCIConfig, cwd: string, config?: BootCo
   ];
 
   if (pm === "pnpm") {
-    jobSteps.push({
-      uses: "pnpm/action-setup@v4",
-    });
+    const pkg = readPackageJson(cwd);
+    const hasPackageManagerField = typeof pkg?.packageManager === "string" && pkg.packageManager.startsWith("pnpm@");
+    jobSteps.push(
+      hasPackageManagerField
+        ? { uses: "pnpm/action-setup@v4" }
+        : { uses: "pnpm/action-setup@v4", with: { version: "latest" } }
+    );
   }
 
   for (const step of steps) {

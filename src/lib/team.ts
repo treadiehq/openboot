@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import * as yaml from "yaml";
 import { BootConfig, TeamConfig, ReferenceEntry } from "../types";
 import { refUrl } from "./references";
@@ -102,19 +102,22 @@ function cloneRepo(url: string, branch: string): void {
   }
 
   log.info(`Cloning team profile from ${url}...`);
-  try {
-    execSync(
-      `git clone --depth 1 --branch ${branch} ${url} ${dir}`,
-      { stdio: "pipe" }
-    );
-  } catch (err: any) {
-    const stderr = err.stderr?.toString() || "";
-    // Try without --branch in case the branch doesn't exist (defaults to HEAD)
+  const result = spawnSync(
+    "git",
+    ["clone", "--depth", "1", "--branch", branch, url, dir],
+    { stdio: "pipe" }
+  );
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || "";
     if (stderr.includes("not found") || stderr.includes("Could not find")) {
-      try {
-        execSync(`git clone --depth 1 ${url} ${dir}`, { stdio: "pipe" });
-      } catch (err2: any) {
-        const msg = err2.stderr?.toString() || err2.message;
+      const fallback = spawnSync(
+        "git",
+        ["clone", "--depth", "1", url, dir],
+        { stdio: "pipe" }
+      );
+      if (fallback.status !== 0) {
+        const msg = fallback.stderr?.toString() || "Clone failed";
         throw new Error(
           `Failed to clone team profile.\n\n` +
             `  URL: ${url}\n` +
@@ -154,19 +157,27 @@ function pullRepo(url: string, branch: string, force: boolean = false): void {
   }
 
   log.info("Syncing team profile...");
-  try {
-    execSync(`git -C ${dir} fetch --depth 1 origin ${branch}`, {
-      stdio: "pipe",
-    });
-    execSync(`git -C ${dir} reset --hard origin/${branch}`, {
-      stdio: "pipe",
-    });
-  } catch {
-    // Fetch failed (offline, auth, etc.) — use cached version
+  const fetchResult = spawnSync(
+    "git",
+    ["-C", dir, "fetch", "--depth", "1", "origin", branch],
+    { stdio: "pipe" }
+  );
+  if (fetchResult.status !== 0) {
     if (force) {
       log.warn("Failed to sync team profile — check your network and credentials");
     }
-    // If not force, silently use cached version
+    return;
+  }
+
+  const resetResult = spawnSync(
+    "git",
+    ["-C", dir, "reset", "--hard", `origin/${branch}`],
+    { stdio: "pipe" }
+  );
+  if (resetResult.status !== 0) {
+    if (force) {
+      log.warn("Failed to sync team profile — check your network and credentials");
+    }
     return;
   }
   writeMeta(url, branch);

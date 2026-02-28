@@ -380,6 +380,18 @@ export function stopProxyBackground(): void {
     if (!isNaN(pid)) {
       try {
         process.kill(pid, "SIGTERM");
+
+        const maxWait = 5000;
+        const start = Date.now();
+        while (Date.now() - start < maxWait) {
+          try {
+            process.kill(pid, 0);
+          } catch {
+            break; // process is dead
+          }
+          const now = Date.now();
+          while (Date.now() - now < 50) { /* spin 50ms */ }
+        }
       } catch {
         // already dead
       }

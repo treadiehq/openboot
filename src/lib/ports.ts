@@ -4,12 +4,36 @@ import * as path from "path";
 
 const PORTS_DIR = path.join(".boot", "ports");
 
+let lsofAvailable: boolean | null = null;
+
+function ensureLsof(): void {
+  if (lsofAvailable === null) {
+    try {
+      execFileSync("lsof", ["-v"], { stdio: "pipe" });
+      lsofAvailable = true;
+    } catch {
+      lsofAvailable = false;
+    }
+  }
+
+  if (!lsofAvailable) {
+    throw new Error(
+      "lsof command not found. Please install lsof:\n" +
+        "  macOS:         lsof is pre-installed\n" +
+        "  Ubuntu/Debian: sudo apt-get install lsof\n" +
+        "  Alpine:        apk add lsof\n" +
+        "  RHEL/CentOS:   sudo yum install lsof"
+    );
+  }
+}
+
 /**
  * Check if a port is currently in use (local LISTEN only).
  * Uses -n (no DNS), -P (no service names), -sTCP:LISTEN to avoid
  * matching outgoing connections to remote servers on the same port.
  */
 export function isPortInUse(port: number): boolean {
+  ensureLsof();
   try {
     execFileSync(
       "lsof",
@@ -28,6 +52,7 @@ export function isPortInUse(port: number): boolean {
  * processes that happen to have outgoing connections on the same port.
  */
 export function killPort(port: number): void {
+  ensureLsof();
   try {
     const output = execFileSync(
       "lsof",
@@ -102,6 +127,7 @@ export function clearResolvedPort(appName: string): void {
  * Restricted to LISTEN state to avoid reporting unrelated connections.
  */
 export function getPortProcess(port: number): string | null {
+  ensureLsof();
   try {
     const result = execFileSync(
       "lsof",

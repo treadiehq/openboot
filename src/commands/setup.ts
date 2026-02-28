@@ -2,6 +2,7 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { loadConfig, getPackageManager } from "../lib/config";
+import { BootConfig } from "../types";
 import { startDocker } from "../lib/docker";
 import { checkPrerequisites } from "../lib/prereqs";
 import { log } from "../lib/log";
@@ -53,7 +54,7 @@ export async function setup(): Promise<void> {
   }
 
   // Smart Prisma handling — generate + migrate with fallback
-  smartPrismaSetup();
+  smartPrismaSetup(config);
 
   log.blank();
   log.success("Setup complete!");
@@ -122,7 +123,7 @@ function handleCommandFallback(cmd: string): boolean {
  * Smart Prisma setup — detect Prisma directories and run generate + migrate.
  * Uses fallback pattern: migrate deploy || db push --accept-data-loss
  */
-function smartPrismaSetup(): void {
+function smartPrismaSetup(config: BootConfig): void {
   const cwd = process.cwd();
   const prismaLocations = [
     "prisma",
@@ -136,7 +137,7 @@ function smartPrismaSetup(): void {
     if (!fs.existsSync(prismaDir)) continue;
 
     const appDir = path.dirname(prismaDir);
-    const pm = getPackageManager();
+    const pm = getPackageManager(config);
 
     // Generate Prisma client (check both local and root node_modules for monorepos)
     const localPrismaClient = path.join(appDir, "node_modules", ".prisma");

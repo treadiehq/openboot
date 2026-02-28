@@ -176,6 +176,7 @@ function startContainers(containers: ContainerConfig[]): void {
 
     // Need to create — check port conflicts first
     const portArgs: string[] = [];
+    let allPortsResolved = true;
     if (ct.ports) {
       for (const p of ct.ports) {
         const resolved = resolveHostPort(p);
@@ -188,14 +189,19 @@ function startContainers(containers: ContainerConfig[]): void {
             portArgs.push("-p", `${freePort}:${resolved.container}`);
           } else {
             log.error(
-              `Port ${resolved.host} in use and no free port found for ${ct.name}`
+              `Port ${resolved.host} in use and no free port found for ${ct.name} — skipping container`
             );
-            continue;
+            allPortsResolved = false;
+            break;
           }
         } else if (resolved) {
           portArgs.push("-p", `${resolved.host}:${resolved.container}`);
         }
       }
+    }
+
+    if (!allPortsResolved) {
+      continue;
     }
 
     // Build env args

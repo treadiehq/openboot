@@ -315,21 +315,7 @@ export function stopApp(app: AppConfig | string): void {
     }
   }
 
-  // 2. Fallback: pkill by command pattern (like airatelimit's pkill -f "nest start")
-  if (!stopped && appCommand) {
-    // Extract the main command for pkill (e.g. "nest start" from "npm run dev")
-    const patterns = extractPkillPatterns(appCommand);
-    for (const pattern of patterns) {
-      try {
-        execSync(`pkill -f "${pattern}" 2>/dev/null`, { stdio: "pipe" });
-        stopped = true;
-      } catch {
-        // no matching process
-      }
-    }
-  }
-
-  // 3. Last resort: force kill by port
+  // 2. Fallback: force kill by port
   if (appPort && isPortInUse(appPort)) {
     log.step(`Force-killing process on port ${appPort}...`);
     killPort(appPort);
@@ -344,22 +330,6 @@ export function stopApp(app: AppConfig | string): void {
   } else {
     log.step(`${appName} is not running`);
   }
-}
-
-/**
- * Extract process name patterns for pkill from a command string.
- */
-function extractPkillPatterns(command: string): string[] {
-  const patterns: string[] = [];
-
-  // "npm run dev" / "pnpm dev" → look for common dev server patterns
-  if (command.includes("nest")) patterns.push("nest start");
-  if (command.includes("nuxt")) patterns.push("nuxt dev");
-  if (command.includes("next")) patterns.push("next dev");
-  if (command.includes("vite")) patterns.push("vite");
-  if (command.includes("tsx")) patterns.push("tsx watch");
-
-  return patterns;
 }
 
 /**

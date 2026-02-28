@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import { execSync } from "child_process";
+import { execSync, spawnSync } from "child_process";
 import { log } from "./log";
 import { ReferenceEntry, ReferenceConfig } from "../types";
 
@@ -110,10 +110,13 @@ function cloneRef(url: string): void {
     fs.mkdirSync(parent, { recursive: true });
   }
 
-  try {
-    execSync(`git clone --depth 1 ${url} ${dir}`, { stdio: "pipe" });
-  } catch (err: any) {
-    const stderr = err.stderr?.toString() || err.message;
+  const result = spawnSync(
+    "git",
+    ["clone", "--depth", "1", url, dir],
+    { stdio: "pipe" }
+  );
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || "Clone failed";
     log.warn(`Failed to clone reference ${url}: ${stderr.trim()}`);
     return;
   }
@@ -130,12 +133,19 @@ function pullRef(url: string, force: boolean = false): void {
     }
   }
 
-  try {
-    execSync(`git -C ${dir} fetch --depth 1 origin`, { stdio: "pipe" });
-    execSync(`git -C ${dir} reset --hard origin/HEAD`, { stdio: "pipe" });
-  } catch {
-    return;
-  }
+  const fetchResult = spawnSync(
+    "git",
+    ["-C", dir, "fetch", "--depth", "1", "origin"],
+    { stdio: "pipe" }
+  );
+  if (fetchResult.status !== 0) return;
+
+  const resetResult = spawnSync(
+    "git",
+    ["-C", dir, "reset", "--hard", "origin/HEAD"],
+    { stdio: "pipe" }
+  );
+  if (resetResult.status !== 0) return;
   writeMeta(url);
 }
 

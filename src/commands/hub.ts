@@ -3,7 +3,7 @@ import * as path from "path";
 import * as yaml from "yaml";
 import * as fs from "fs";
 import { log } from "../lib/log";
-import { findConfig } from "../lib/config";
+import { findConfig, detectPackageManager } from "../lib/config";
 import { HubConfig } from "../types";
 import {
   detectCISteps,
@@ -62,18 +62,29 @@ export function registerHubCommands(program: Command): void {
           addHubSection(configPath, hubConfig);
           config.hub = hubConfig;
           log.success(`Added hub section to ${path.basename(configPath)}`);
-        }
-
-        if (!config.hub) {
-          config.hub = {
-            ci: { on: ["push", "pull_request"], node: nodeVersion, steps },
+        } else if (!configPath && !config.hub) {
+          const hubConfig: HubConfig = {
+            ci: {
+              on: ["push", "pull_request"],
+              node: nodeVersion,
+              steps,
+            },
             prTemplate: { sections: DEFAULT_PR_TEMPLATE_SECTIONS },
             targets: DEFAULT_HUB_TARGETS,
           };
+          const minimalConfig = {
+            name: path.basename(cwd),
+            packageManager: detectPackageManager(cwd),
+            hub: hubConfig,
+          };
+          const yamlStr = yaml.stringify(minimalConfig, { indent: 2, lineWidth: 0 });
+          fs.writeFileSync(path.join(cwd, "boot.yaml"), yamlStr);
+          config.hub = hubConfig;
+          log.success("Created boot.yaml with hub section");
         }
 
-        if (!config.hub.prTemplate) {
-          config.hub.prTemplate = { sections: DEFAULT_PR_TEMPLATE_SECTIONS };
+        if (!config.hub!.prTemplate) {
+          config.hub!.prTemplate = { sections: DEFAULT_PR_TEMPLATE_SECTIONS };
         }
 
         const { written, skipped } = syncHubTargets(config, cwd, {

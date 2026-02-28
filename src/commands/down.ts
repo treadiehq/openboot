@@ -12,9 +12,10 @@ export async function down(): Promise<void> {
   try {
     config = loadConfig();
   } catch {
-    // Even without config, try to stop any running apps
+    // Even without config, try to stop any running apps and proxy
     log.info("No boot.yaml found — stopping any tracked processes...");
     stopAllApps();
+    stopProxyBackground();
     return;
   }
 

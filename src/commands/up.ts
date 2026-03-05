@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execSync, execFileSync, spawnSync } from "child_process";
 import { loadConfig, getPackageManager } from "../lib/config";
 import { startDocker } from "../lib/docker";
 import { startApp } from "../lib/process";
@@ -37,7 +37,7 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
     }
   }
 
-  const pm = getPackageManager(config);
+  const pm = sanitizePackageManager(getPackageManager(config));
 
   // Ensure package manager is available (corepack auto-setup)
   ensurePackageManager(pm);
@@ -46,7 +46,7 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
   if (!fs.existsSync("node_modules") && fs.existsSync("package.json")) {
     log.info("Dependencies not installed — running install...");
     try {
-      execSync(`${pm} install`, { stdio: "inherit" });
+      execFileSync(pm, ["install"], { stdio: "inherit" });
       log.success("Dependencies installed");
     } catch {
       log.error("Failed to install dependencies");
@@ -67,7 +67,7 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
         ) {
           log.info(`Installing dependencies for ${app.name}...`);
           try {
-            execSync(`${pm} install`, { cwd: appDir, stdio: "inherit" });
+            execFileSync(pm, ["install"], { cwd: appDir, stdio: "inherit" });
             log.success(`${app.name} dependencies installed`);
           } catch {
             log.warn(`Failed to install deps for ${app.name} — continuing`);
@@ -151,6 +151,22 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
       });
     });
   }
+}
+
+/**
+ * Validate that a package manager name is one of the known-safe values.
+ * Prevents shell injection when the pm string is used in command execution.
+ */
+const ALLOWED_PACKAGE_MANAGERS = ["npm", "pnpm", "yarn", "bun"] as const;
+type AllowedPm = typeof ALLOWED_PACKAGE_MANAGERS[number];
+
+function sanitizePackageManager(pm: string): AllowedPm {
+  if ((ALLOWED_PACKAGE_MANAGERS as readonly string[]).includes(pm)) {
+    return pm as AllowedPm;
+  }
+  throw new Error(
+    `Unsupported packageManager "${pm}" in boot.yaml. Allowed values: ${ALLOWED_PACKAGE_MANAGERS.join(", ")}`
+  );
 }
 
 /**
@@ -249,9 +265,9 @@ function validateEnv(config: BootConfig): boolean {
  * Ensure the detected package manager is actually available.
  * If pnpm is needed but not installed, try corepack or global install.
  */
-function ensurePackageManager(pm: string): void {
+function ensurePackageManager(pm: AllowedPm): void {
   try {
-    execSync(`${pm} --version`, { stdio: "pipe" });
+    execFileSync(pm, ["--version"], { stdio: "pipe" });
     return; // Already available
   } catch {
     // Not found
@@ -260,7 +276,7 @@ function ensurePackageManager(pm: string): void {
   if (pm === "pnpm") {
     log.info("pnpm not found — enabling via corepack...");
     try {
-      execSync("corepack enable pnpm", { stdio: "pipe" });
+      execFileSync("corepack", ["enable", "pnpm"], { stdio: "pipe" });
       log.success("pnpm enabled via corepack");
       return;
     } catch {
@@ -269,7 +285,7 @@ function ensurePackageManager(pm: string): void {
 
     log.info("Trying global install...");
     try {
-      execSync("npm install -g pnpm", { stdio: "inherit" });
+      execFileSync("npm", ["install", "-g", "pnpm"], { stdio: "inherit" });
       log.success("pnpm installed globally");
       return;
     } catch {
@@ -281,7 +297,7 @@ function ensurePackageManager(pm: string): void {
   if (pm === "yarn") {
     log.info("yarn not found — enabling via corepack...");
     try {
-      execSync("corepack enable yarn", { stdio: "pipe" });
+      execFileSync("corepack", ["enable", "yarn"], { stdio: "pipe" });
       log.success("yarn enabled via corepack");
       return;
     } catch {
@@ -300,7 +316,7 @@ function ensurePackageManager(pm: string): void {
  */
 function smartPrismaCheck(
   config: BootConfig,
-  pm: string,
+  pm: AllowedPm,
   projectRoot: string
 ): void {
   const prismaLocations = [
@@ -322,12 +338,11 @@ function smartPrismaCheck(
 
     if (!fs.existsSync(localPrismaClient) && !fs.existsSync(rootPrismaClient)) {
       log.info(`Generating Prisma client (${loc})...`);
-      const runCmd = pm === "npm" ? "npx" : pm;
+      const [runCmd, ...runArgs] = pm === "npm"
+        ? ["npx", "prisma", "generate"]
+        : [pm, "prisma", "generate"];
       try {
-        execSync(`${runCmd} prisma generate`, {
-          cwd: appDir,
-          stdio: "inherit",
-        });
+        execFileSync(runCmd, runArgs, { cwd: appDir, stdio: "inherit" });
         log.success("Prisma client generated");
       } catch {
         log.warn("Failed to generate Prisma client — continuing");

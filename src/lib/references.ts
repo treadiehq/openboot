@@ -247,6 +247,9 @@ function isTextFile(filePath: string): boolean {
  * Collect files matching an include path.
  * - If it is a file, include it directly.
  * - If it is a directory, include all text files recursively.
+ *
+ * The resolved path is checked against the repo root to prevent path-traversal
+ * attacks where a malicious team profile supplies an include like "../../.ssh/id_rsa".
  */
 function collectFiles(
   dir: string,
@@ -256,7 +259,14 @@ function collectFiles(
   const results: ExtractedFile[] = [];
   let totalSize = 0;
 
-  const fullPath = path.join(dir, includePath);
+  const safeRoot = path.resolve(dir);
+  const fullPath = path.resolve(safeRoot, includePath);
+
+  // Reject any path that escapes the repo root directory
+  if (!fullPath.startsWith(safeRoot + path.sep) && fullPath !== safeRoot) {
+    log.warn(`Skipping unsafe include path (traversal detected): ${includePath}`);
+    return results;
+  }
 
   // Direct file
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
@@ -265,14 +275,15 @@ function collectFiles(
     return results;
   }
 
-  // Directory — walk recursively
+  // Directory — walk recursively, using absolute paths throughout to avoid
+  // re-introducing traversal vectors inside the walk.
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory()) {
-    const walkDir = (dirPath: string, relBase: string) => {
+    const walkDir = (absDir: string) => {
       if (totalSize >= maxTotal) return;
 
       let entries: string[];
       try {
-        entries = fs.readdirSync(dirPath);
+        entries = fs.readdirSync(absDir);
       } catch {
         return;
       }
@@ -281,15 +292,16 @@ function collectFiles(
         if (entry.startsWith(".")) continue;
         if (entry === "node_modules") continue;
 
-        const entryPath = path.join(dirPath, entry);
-        const relPath = path.join(relBase, entry);
+        const entryPath = path.join(absDir, entry);
 
         try {
           const stat = fs.statSync(entryPath);
           if (stat.isDirectory()) {
-            walkDir(entryPath, relPath);
+            walkDir(entryPath);
           } else if (stat.isFile() && isTextFile(entry)) {
             if (totalSize >= maxTotal) return;
+            // Compute the relative path from the repo root for the ExtractedFile record
+            const relPath = path.relative(safeRoot, entryPath);
             const file = readFileContent(dir, relPath);
             if (file) {
               totalSize += file.content.length;
@@ -302,7 +314,7 @@ function collectFiles(
       }
     };
 
-    walkDir(fullPath, includePath);
+    walkDir(fullPath);
     return results;
   }
 
@@ -313,9 +325,17 @@ function collectFiles(
 
 /**
  * Read a single file from the repo, with size cap.
+ * Guards against path-traversal by ensuring the resolved path stays within the repo root.
  */
 function readFileContent(repoRoot: string, relPath: string): ExtractedFile | null {
-  const fullPath = path.join(repoRoot, relPath);
+  const safeRoot = path.resolve(repoRoot);
+  const fullPath = path.resolve(safeRoot, relPath);
+
+  if (!fullPath.startsWith(safeRoot + path.sep) && fullPath !== safeRoot) {
+    log.warn(`Skipping unsafe file path (traversal detected): ${relPath}`);
+    return null;
+  }
+
   if (!fs.existsSync(fullPath)) return null;
 
   try {

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import * as yaml from "yaml";
 import { log } from "../lib/log";
 import {
@@ -470,10 +471,12 @@ function detectRawContainers(cwd: string): ContainerConfig[] {
       if (ct.image.includes("postgres")) {
         ct.readyCheck = "pg_isready -U postgres";
         ct.timeout = 30;
-        // Postgres requires POSTGRES_PASSWORD to start
+        // Postgres requires POSTGRES_PASSWORD to start.
+        // A random password is generated so it is unique per project and not
+        // guessable — do not use this value in production environments.
         if (!ct.env) ct.env = {};
         if (!ct.env.POSTGRES_PASSWORD) {
-          ct.env.POSTGRES_PASSWORD = "boot_dev_password";
+          ct.env.POSTGRES_PASSWORD = crypto.randomBytes(16).toString("hex");
         }
         if (!ct.env.POSTGRES_DB) {
           // Derive DB name from container name (e.g. "ai-proxy-db" → "ai_proxy")
@@ -485,9 +488,11 @@ function detectRawContainers(cwd: string): ContainerConfig[] {
       } else if (ct.image.includes("mysql") || ct.image.includes("mariadb")) {
         ct.readyCheck = "mysqladmin ping -h localhost";
         ct.timeout = 30;
+        // A random password is generated so it is unique per project and not
+        // guessable — do not use this value in production environments.
         if (!ct.env) ct.env = {};
         if (!ct.env.MYSQL_ROOT_PASSWORD) {
-          ct.env.MYSQL_ROOT_PASSWORD = "boot_dev_password";
+          ct.env.MYSQL_ROOT_PASSWORD = crypto.randomBytes(16).toString("hex");
         }
       } else if (ct.image.includes("redis")) {
         ct.readyCheck = "redis-cli ping";

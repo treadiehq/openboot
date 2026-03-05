@@ -17,15 +17,40 @@ const BOOT_DIR = ".boot";
 const PIDS_DIR = path.join(BOOT_DIR, "pids");
 const LOGS_DIR = path.join(BOOT_DIR, "logs");
 
+/**
+ * Create a directory (and its parents) then tighten permissions to 0o700 so
+ * that only the owning user can read or write PID/log files inside .boot/.
+ * This reduces the window for a malicious local process to tamper with them.
+ */
+function mkdirSecure(dir: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.chmodSync(dir, 0o700);
+    // Also harden the .boot root itself on first creation
+    fs.chmodSync(BOOT_DIR, 0o700);
+  } catch {
+    // Non-fatal: chmod may fail on some filesystems (e.g. Windows NTFS, some Docker mounts)
+  }
+}
+
 function ensureDirs(): void {
-  fs.mkdirSync(PIDS_DIR, { recursive: true });
-  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  mkdirSecure(PIDS_DIR);
+  mkdirSecure(LOGS_DIR);
+}
+
+/**
+ * Guard against signaling PID 1 (init) or out-of-range values read from
+ * untrusted PID files.  Valid PIDs on Linux/macOS are 2–4,194,304.
+ */
+function isSafePid(pid: number): boolean {
+  return Number.isInteger(pid) && pid > 1 && pid <= 4_194_304;
 }
 
 /**
  * Check if a process is still running.
  */
 export function isProcessRunning(pid: number): boolean {
+  if (!isSafePid(pid)) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -56,7 +81,7 @@ export function getAppPid(appName: string): number | null {
   if (!fs.existsSync(pf)) return null;
 
   const pid = parseInt(fs.readFileSync(pf, "utf-8").trim(), 10);
-  if (isNaN(pid)) return null;
+  if (!isSafePid(pid)) return null;
 
   if (!isProcessRunning(pid)) {
     // Stale PID file
@@ -220,7 +245,17 @@ export function startApp(app: AppConfig, projectRoot: string): void {
   if (resolvedPort !== undefined) {
     env.PORT = String(resolvedPort);
     env.HOST = "127.0.0.1";
-    env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = ".localhost";
+
+    // Vite 5+ validates the Host header and rejects subdomain requests by default,
+    // which breaks the boot proxy's *.localhost routing.  We allow .localhost only
+    // when the app's command is actually Vite-based.  This bypasses Vite's DNS-rebinding
+    // protection for .localhost subdomains, which is an accepted trade-off for a
+    // localhost-only dev proxy.  Do NOT set this for non-Vite apps or in production.
+    const resolvedScript = resolveScriptCommand(app.command, cwd) ?? "";
+    const commandIsVite = app.command.includes("vite") || resolvedScript.includes("vite");
+    if (commandIsVite) {
+      env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = ".localhost";
+    }
   }
 
   // Inject --port/--host for frameworks that ignore PORT env var
@@ -270,7 +305,7 @@ export function stopApp(app: AppConfig | string): void {
   if (fs.existsSync(pf)) {
     const pid = parseInt(fs.readFileSync(pf, "utf-8").trim(), 10);
 
-    if (!isNaN(pid) && isProcessRunning(pid)) {
+    if (isSafePid(pid) && isProcessRunning(pid)) {
       // Kill the process group (negative PID)
       try {
         process.kill(-pid, "SIGTERM");

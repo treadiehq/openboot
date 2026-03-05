@@ -6,10 +6,25 @@ import { spawn } from "child_process";
 import { log } from "./log";
 import { isPortInUse } from "./ports";
 
-const PROXY_DIR = path.join(".boot", "proxy");
+const BOOT_DIR = ".boot";
+const PROXY_DIR = path.join(BOOT_DIR, "proxy");
 const ROUTES_FILE = path.join(PROXY_DIR, "routes.json");
 const PID_FILE = path.join(PROXY_DIR, "proxy.pid");
 const LOG_FILE = path.join(PROXY_DIR, "proxy.log");
+
+/**
+ * Create a directory (and its parents) then tighten permissions to 0o700 so
+ * that only the owning user can read or write files inside .boot/.
+ */
+function mkdirSecure(dir: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.chmodSync(dir, 0o700);
+    fs.chmodSync(BOOT_DIR, 0o700);
+  } catch {
+    // Non-fatal: chmod may fail on some filesystems
+  }
+}
 
 export const PROXY_PORT = 1355;
 const MAX_PORT_ATTEMPTS = 10;
@@ -33,7 +48,16 @@ interface RouteEntry {
   pid: number;
 }
 
+/**
+ * Guard against signaling PID 1 (init) or out-of-range values read from
+ * untrusted PID files.  Valid PIDs on Linux/macOS are 2–4,194,304.
+ */
+function isSafePid(pid: number): boolean {
+  return Number.isInteger(pid) && pid > 1 && pid <= 4_194_304;
+}
+
 function isProcessAlive(pid: number): boolean {
+  if (!isSafePid(pid)) return false;
   try {
     process.kill(pid, 0);
     return true;
@@ -93,7 +117,7 @@ export function readRoutes(): Record<string, number> {
 }
 
 export function writeRoute(name: string, port: number, pid?: number): void {
-  fs.mkdirSync(PROXY_DIR, { recursive: true });
+  mkdirSecure(PROXY_DIR);
   const raw = readRoutesRaw();
   raw[name] = { port, pid: pid ?? process.pid };
   fs.writeFileSync(ROUTES_FILE, JSON.stringify(raw, null, 2));
@@ -346,7 +370,7 @@ export function startProxyBackground(port = PROXY_PORT): number {
     return 0;
   }
 
-  fs.mkdirSync(PROXY_DIR, { recursive: true });
+  mkdirSecure(PROXY_DIR);
 
   const logFd = fs.openSync(LOG_FILE, "a");
   const modulePath = path.resolve(__dirname, "proxy.js");
@@ -377,7 +401,7 @@ export function startProxyBackground(port = PROXY_PORT): number {
 export function stopProxyBackground(): void {
   try {
     const pid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
-    if (!isNaN(pid)) {
+    if (isSafePid(pid)) {
       try {
         process.kill(pid, "SIGTERM");
 
@@ -406,7 +430,7 @@ export function stopProxyBackground(): void {
 export function isProxyRunning(): boolean {
   try {
     const pid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
-    if (isNaN(pid)) return false;
+    if (!isSafePid(pid)) return false;
     process.kill(pid, 0);
     return true;
   } catch {

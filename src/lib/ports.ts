@@ -2,7 +2,21 @@ import { execFileSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
-const PORTS_DIR = path.join(".boot", "ports");
+const BOOT_DIR = ".boot";
+const PORTS_DIR = path.join(BOOT_DIR, "ports");
+
+/**
+ * Create a directory (and its parents) then tighten permissions to 0o700.
+ */
+function mkdirSecure(dir: string): void {
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.chmodSync(dir, 0o700);
+    fs.chmodSync(BOOT_DIR, 0o700);
+  } catch {
+    // Non-fatal: chmod may fail on some filesystems
+  }
+}
 
 let lsofAvailable: boolean | null = null;
 
@@ -97,7 +111,7 @@ export function findFreePort(min = 4000, max = 4999): number {
  * Persist the resolved port for an app so status/stop can read it later.
  */
 export function saveResolvedPort(appName: string, port: number): void {
-  fs.mkdirSync(PORTS_DIR, { recursive: true });
+  mkdirSecure(PORTS_DIR);
   fs.writeFileSync(path.join(PORTS_DIR, `${appName}.port`), String(port));
 }
 

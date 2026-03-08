@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .boot/
+.openboot/
 *.log
 .DS_Store
 *.tgz

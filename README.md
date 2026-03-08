@@ -1,197 +1,109 @@
-# Openboot
+# OpenBoot
 
-> One config for every AI coding tool. One command to start your whole stack.
-
-Every AI coding tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `SOUL.md`, `SKILL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between them. They drift. New projects start from scratch. Your team has no shared baseline.
-
-Boot fixes this. It auto-detects your stack and generates agent context for Cursor, GitHub Copilot, OpenCode Claude Code, and Codex from one source. Your conventions follow you across projects. Your team's standards apply everywhere.
-
-```bash
-npx openboot agent init
-# ▶ Stack: Next.js, Prisma, TypeScript, Tailwind CSS, Vitest
-# ▶ Skills: cloudflare-deploy, github, coding-agent
-# ✓ Wrote .cursorrules
-# ✓ Wrote AGENTS.md
-# ✓ Wrote CLAUDE.md
-# ✓ Wrote .github/copilot-instructions.md
-```
-
-No config file needed. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control over conventions, soul, skills, or team profiles.
-
-Boot also starts your whole stack with one command: Docker, apps, env checks, reverse proxy — but you can use it just for agent sync. No commitment to the rest.
-
-## Install
+One tool for AI-assisted development. Keep your agents in sync, your sessions tracked, and your context intact, across projects, machines, and teammates.
 
 ```bash
 npm install -g openboot
 ```
 
-Or try without installing:
-
-```bash
-npx openboot agent init
-```
-
 Requires Node 18+.
+
+---
 
 ## Agent Sync
 
-Boot generates and syncs AI agent instruction files from one source of truth. It detects 30+ technologies from your project, merges personal and team conventions, and writes to every target at once.
+Every AI tool wants its own instruction file. Cursor wants `.cursorrules`. Claude wants `CLAUDE.md`. Copilot wants `copilot-instructions.md`. You copy-paste the same conventions between them, they drift, and new projects start from scratch.
+
+Boot fixes that. One source, every target.
 
 ```bash
-boot agent init               # auto-detect stack, generate all targets
+boot agent init
+# ▶ Stack detected: Next.js, Prisma, TypeScript, Tailwind, Vitest
+# ✓ .cursorrules
+# ✓ AGENTS.md
+# ✓ CLAUDE.md
+# ✓ .github/copilot-instructions.md
+```
+
+No config required. Boot reads your `package.json` and project structure. Add a `boot.yaml` when you want control.
+
+```bash
+boot agent init               # auto-detect stack, write all targets
 boot agent sync               # regenerate after editing boot.yaml
-boot agent sync --overwrite   # replace existing agent files
+boot agent sync --overwrite   # replace existing files
 boot agent check              # verify targets are in sync (CI-friendly)
-boot agent remember "..."     # save a pattern that carries across projects
+boot agent remember "..."     # save a pattern that carries to every project
 boot agent status             # see what Boot knows about your project
 ```
 
-Existing agent files are preserved — Boot only creates missing targets. Use `--overwrite` to replace them.
-
-### Conventions That Follow You
-
-Your conventions live in `~/.boot/agent/` and apply to every project automatically.
+### Conventions that follow you
 
 ```bash
 boot agent remember "Always validate API inputs with zod schemas"
 boot agent remember "Prefer named exports over default exports"
-boot agent save          # push project conventions to your global store
+boot agent save               # push project conventions to your global store
+boot agent init --from ~/other-project   # import conventions from another project
 ```
 
-Import conventions from another project:
+### Team baseline
+
+Share a company-wide baseline across every repo:
 
 ```bash
-boot agent init --from ~/other-project
+boot team set git@github.com:company/boot-standards.git
+boot team sync       # pull latest
+boot team check      # CI: verify it's applied
 ```
 
-### Project Config
-
-Add an `agent` section to `boot.yaml` for project-specific conventions:
+### `boot.yaml`
 
 ```yaml
 agent:
-  description: "E-commerce platform with Next.js frontend and Express API"
+  description: "E-commerce platform — Next.js + Prisma"
   conventions:
     - Use server components by default
     - All DB access through Prisma
-  references:
-    - git@github.com:Effect-TS/effect.git
   targets:
     - .cursorrules
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
-```
-
-### Soul — AI Identity
-
-Define who the AI agent is in your project, its values, boundaries, and voice. Inspired by the [soul document](https://soul.md/) concept. Boot generates a `SOUL.md` when you add a `soul` section.
-
-```yaml
-agent:
   soul:
-    identity: "You are a senior fullstack engineer. You care about code quality and user experience."
-    values:
-      - Correctness over speed
-      - Ask before making breaking changes
+    identity: "Senior fullstack engineer. Correctness over speed."
     boundaries:
       - Never modify production configs directly
       - Always run tests before marking work complete
-    voice:
-      - Be direct and concise
-      - When uncertain, say so
-```
-
-### Skills — Detect & Sync
-
-Boot doesn't generate skills, it finds and syncs the ones you already have. Skills follow the [Agent Skills](https://agentskills.io/) standard: each skill is a directory with a `SKILL.md` file containing YAML frontmatter.
-
-```
-skills/
-├── cloudflare-deploy/
-│   └── SKILL.md
-├── github/
-│   └── SKILL.md
-└── coding-agent/
-    └── SKILL.md
-```
-
-Boot auto-scans `skills/`, `.codex/skills/`, and `.cursor/skills/` for existing skills and includes their names and descriptions in the generated agent context. You can also specify custom scan paths:
-
-```yaml
-agent:
   skills:
     paths:
-      - my-skills/
-      - shared/workflows/
-```
-
-If your team profile repo has a `skills/` directory, Boot syncs those skills into your project during `boot agent init` and `boot agent sync`, so the whole team shares the same capabilities.
-
-### References
-
-Point your agent context at any git repo. Boot clones it to a global cache, keeps it updated, and includes the content so AI tools can answer questions about your dependencies.
-
-```yaml
-agent:
+      - skills/
   references:
     - git@github.com:Effect-TS/effect.git
-
-    - url: git@github.com:Effect-TS/effect.git
-      include:
-        - docs/
-        - packages/effect/README.md
 ```
 
-Without `include`, Boot pulls the README. With `include`, you control exactly what gets included. Repos are cached at `~/.boot/references/` and auto-refreshed.
+---
 
-## Team Profiles
+## Dev Orchestration
 
-Share a company-wide baseline across every repo. The team profile lives in a git repo — conventions, env rules, setup commands, and Boot merges it under your project config.
+Start your whole stack with one command.
 
 ```bash
-boot team set git@github.com:company/boot-standards.git
-boot team sync       # force-pull latest
-boot team check      # CI: verify it's applied
-boot team status     # see what's merged
-boot team remove     # disconnect
-```
-
-```yaml
-team:
-  url: git@github.com:company/boot-standards.git
-  required: true
-```
-
-Team conventions are merged into the conventions list with a `[team]` prefix, so it's clear what comes from the team vs. the project.
-
-## Project Setup & Dev
-
-Boot also orchestrates your entire dev environment. Docker, app processes, env validation, reverse proxy, from the same `boot.yaml`.
-
-```bash
-boot init          # auto-detect stack, create boot.yaml
+boot init          # detect stack, create boot.yaml
 boot setup         # one-time: install deps, start DB, run migrations
-boot dev           # start everything with live logs (Ctrl+C stops all)
+boot dev           # start everything with live logs
 boot up            # start everything in the background
 boot down          # stop everything
-boot status        # show what's running
+boot status        # see what's running
 boot logs api -f   # follow a service's logs
 ```
 
-Every app gets a stable `.localhost` URL on port 1355. No more remembering port numbers:
+Every app gets a stable `.localhost` URL:
 
 ```
 api  → http://api.localhost:1355
 web  → http://web.localhost:1355
 ```
 
-### Config
-
 ```yaml
-name: my-project
-
 env:
   required:
     - DATABASE_URL
@@ -218,51 +130,116 @@ apps:
     port: auto
 ```
 
-## Editor & CI Sync
+---
 
-Define editor tasks and CI workflows once, generate for multiple targets.
+## Session Tracking
+
+Git tracks code. OpenBoot tracks the AI work behind it.
+
+Every session, task, and decision is stored locally in `.openboot/` as plain JSON, no account, no cloud, no lock-in. When you switch branches or machines, OpenBoot picks up exactly where you left off.
+
+```
+.openboot/
+  sessions/       ← your AI work history
+  tasks/          ← units of work across sessions
+  snapshots/      ← lightweight checkpoints
+  context/        ← rebuilt context for AI tools
+  bundles/        ← portable exports for sharing
+```
+
+### Start tracking
 
 ```bash
-boot editor init     # → .vscode/tasks.json + .zed/tasks.json
-boot hub init        # → .github/workflows/ci.yml + .forgejo/workflows/ci.yml
+boot session start --task "Add rate limiting" --tool cursor
+boot run claude                    # wrap any CLI tool — captures everything live
+boot session import cursor         # import from local Cursor history files
+boot session import claude         # import from local Claude transcript files
 ```
 
-```yaml
-editor:
-  tasks:
-    - name: dev
-      command: pnpm dev
-    - name: test
-      command: pnpm test
-      group: test
-  targets: [.vscode, .zed]
+`boot run` is the most reliable method, it wraps the tool as a child process and records every prompt, response, and file change directly into the session.
 
-hub:
-  ci:
-    on: [push, pull_request]
-    steps:
-      - name: Install
-        run: pnpm install
-      - name: Test
-        run: pnpm test
-  prTemplate:
-    sections:
-      - name: Summary
-        prompt: "What changed and why?"
-      - name: Test plan
-        prompt: "How was this tested?"
-  targets: [.github, .forgejo]
+### Resume where you left off
+
+```bash
+boot resume                        # auto-picks best session for this repo + branch
+boot context build                 # rebuild context file for your AI tool
+boot continue                      # pull latest sync + resume (cross-machine)
 ```
 
-Both support `sync`, `check`, and `--overwrite`, same pattern as agent sync.
+```
+Resuming context
 
-## Programmatic Integration
+  Repo:   openboot
+  Branch: feature/rate-limiting
+  Task:   Add rate limiting middleware
+  Last active: 45m ago
+```
 
-A [JSON Schema](schema.json) for `boot.yaml` is included for editor autocomplete and validation. `boot status --json`, `boot agent status --json`, and `boot config` output structured JSON for tools that want to integrate Boot programmatically.
+### Tasks and snapshots
 
-## Docs
+```bash
+boot task create --title "Add rate limiting"
+boot task resume <id>              # marks active, links to current session
+boot task close <id>
 
-See [DETAILED.md](DETAILED.md) for the full config reference, auto-detection list, and command details.
+boot snapshot create               # checkpoint current git state + context
+boot snapshot restore <id>         # prints restore plan — never mutates your repo
+```
+
+### Timeline and replay
+
+```bash
+boot timeline                      # chronological history for this repo
+boot replay                        # replay a session message by message
+boot replay --messages-only        # just prompts and responses
+```
+
+```
+10:41  Started session — Add rate limiting
+10:44  Created task
+10:49  Ran: boot run claude
+10:53  File changed: src/middleware/rateLimit.ts
+11:02  Snapshot created on feature/rate-limiting
+```
+
+### Sync across machines
+
+```bash
+boot sync enable icloud            # or dropbox-folder, google-drive-folder, onedrive-folder
+boot sync push
+boot sync pull
+boot daemon start                  # auto-sync every 60s in the background
+```
+
+Sync copies `.openboot/` to a folder you own. The cloud provider's app handles the transfer. No data goes through OpenBoot's servers, there are none.
+
+### Share with teammates
+
+```bash
+boot share create                  # bundle sessions, tasks, snapshots
+boot import bundle ./bundle.json   # merge on another machine
+```
+
+### AI summaries
+
+```bash
+boot summarize session             # summarize the active session
+boot summarize task <id>
+```
+
+Set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` to get AI-generated summaries. Without any key, deterministic summarization runs automatically, no network required.
+
+---
+
+## Limitations
+
+- Imports read local files only, no cloud API access for Cursor, Claude, or OpenAI
+- `boot run` captures CLI tools only, not IDE agents
+- Snapshot restore prints a plan; it does not reset your working tree
+- The background daemon stops when your machine sleeps (it's not a system service)
+- The `git` sync provider uses folder copy, not native git push/pull
+
+---
 
 ## License
 

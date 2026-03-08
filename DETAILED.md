@@ -1,62 +1,16 @@
-# Openboot
+# OpenBoot — Full Reference
 
-Every project has the same problem: a README that says "run these 12 commands to get started," a `start.sh` that half works, Docker containers you forgot to start, and env vars you didn't set. New teammates spend hours just trying to run the thing.
+This document covers the complete configuration reference, auto-detection list, command details, and session tracking internals. Start with the [README](README.md) for the quick overview.
 
-Then there's the AI problem: every tool wants its own instruction file — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`. `SKILL.md`, `SOUL.md`, `copilot-instructions.md`, and you're copy-pasting the same conventions between projects and files.
+---
 
-Boot fixes both. One config file, one command, everything starts, and your AI agent context stays in sync across every tool and every project.
+## `boot.yaml` — Full Config Reference
 
-> Stop writing start scripts. Stop copy-pasting agent files. Just boot.
-
-```
-boot init        → creates boot.yaml (auto-detects your stack)
-boot setup       → one-time setup (deps, DB, migrations)
-boot up          → start everything (Docker + apps) in the background
-boot up -a       → start everything + stream logs (Ctrl+C detaches)
-boot dev         → interactive dev mode with live logs (Ctrl+C stops all)
-boot down        → stop everything
-boot reboot      → restart everything
-boot status      → show what's running
-boot logs        → view service logs (boot logs api -f)
-boot clean       → nuke deps, caches, build outputs for a fresh start
-boot agent init  → generate AI agent context (.cursorrules, AGENTS.md, CLAUDE.md)
-boot editor init → generate editor config (.vscode/tasks.json, .zed/tasks.json)
-boot hub init    → generate CI workflows (.github/workflows, .forgejo/workflows)
-```
-
-## Install
-
-Requires Node 18+.
-
-```bash
-npm install -g openboot
-```
-
-Or use without installing:
-
-```bash
-npx openboot init
-```
-
-## Quick Start
-
-```bash
-# In any project
-boot init        # creates boot.yaml by auto-detecting your stack
-boot setup       # one-time: install deps, start DB, run migrations
-boot up          # start Docker + all app processes
-boot dev         # or: start + stream live logs (Ctrl+C stops all)
-boot agent init  # optional: generate AI agent context for Cursor, Copilot, Claude, Codex
-```
-
-That's it. `boot init` detects your Docker setup, apps, package manager, env requirements, and generates the config. Boot doesn't replace your scripts—it orchestrates them: one place to maintain, and `boot init` / `boot agent init` do the rest so you rarely edit by hand.
-
-## Config
-
-`boot init` creates a `boot.yaml` in your project root:
+`boot init` creates this file. Everything is optional except what you explicitly need.
 
 ```yaml
 name: my-project
+packageManager: pnpm          # auto-detected from lockfiles if omitted
 
 env:
   file: .env
@@ -73,16 +27,13 @@ setup:
   - pnpm db:push
 
 docker:
-  # Option A: Docker Compose
   composeFile: docker-compose.yml
   services:
     - name: postgres
       container: my-project-postgres
       readyCheck: pg_isready -U postgres
       timeout: 30
-
-  # Option B: Standalone containers (no compose needed)
-  containers:
+  containers:                  # standalone containers (no compose)
     - name: my-db
       image: postgres:15
       ports:
@@ -102,24 +53,46 @@ apps:
   - name: web
     path: apps/web
     command: pnpm dev
-    port: auto          # assigns a free port (4000–4999) at startup
+    port: auto                 # assigns free port in 4000–4999 range
 
 agent:
-  description: "E-commerce platform with Next.js frontend and Express API"
+  description: "E-commerce platform — Next.js + Prisma"
   conventions:
     - Use server components by default
     - All DB access through Prisma
-    - Tests use Vitest
   targets:
     - .cursorrules
     - AGENTS.md
     - CLAUDE.md
     - .github/copilot-instructions.md
+  soul:
+    identity: "Senior fullstack engineer. Correctness over speed."
+    values:
+      - Type safety is non-negotiable
+      - Ask before making breaking changes
+    boundaries:
+      - Never modify production configs directly
+      - Always run tests before marking work complete
+    voice:
+      - Be direct and concise
+      - When uncertain, say so
+  skills:
+    paths:
+      - my-skills/
+      - shared/workflows/
+  references:
+    - git@github.com:Effect-TS/effect.git
+    - url: git@github.com:Effect-TS/effect.git
+      include:
+        - docs/
+        - packages/effect/README.md
 
 editor:
   tasks:
     - name: dev
       command: pnpm dev
+      cwd: apps/web
+      group: build
     - name: test
       command: pnpm test
       group: test
@@ -143,25 +116,30 @@ hub:
   targets:
     - .github
     - .forgejo
+
+team:
+  url: git@github.com:company/boot-standards.git
+  required: true
+  branch: main
 ```
 
-### Config Reference
+### Field reference
 
 | Field | Description |
-|-------|-------------|
+|---|---|
 | `name` | Project name (display only) |
-| `packageManager` | `pnpm`, `npm`, or `yarn` (auto-detected if omitted) |
+| `packageManager` | `pnpm`, `npm`, or `yarn` (auto-detected from lockfiles) |
 | **env** | |
 | `env.file` | Path to `.env` file (default: `.env`) |
-| `env.required` | Env vars that must be set — `boot up` fails if missing |
-| `env.reject` | Values to reject per key (blocks example/default secrets) |
+| `env.required` | Vars that must be set — `boot up` fails if missing |
+| `env.reject` | Values to reject per key (blocks default/example secrets) |
 | **setup** | |
-| `setup` | Commands to run on `boot setup` |
+| `setup` | Commands to run on `boot setup`, in order |
 | **docker** | |
 | `docker.composeFile` | Path to compose file (default: `docker-compose.yml`) |
 | `docker.services[].name` | Compose service name |
 | `docker.services[].container` | Container name for `docker exec` |
-| `docker.services[].readyCheck` | Command to check if service is ready |
+| `docker.services[].readyCheck` | Command to verify service is ready |
 | `docker.services[].timeout` | Seconds to wait for readiness (default: 30) |
 | `docker.containers[].name` | Standalone container name |
 | `docker.containers[].image` | Docker image (e.g. `postgres:15`) |
@@ -171,65 +149,78 @@ hub:
 | `docker.containers[].readyCheck` | Readiness check command |
 | `docker.containers[].timeout` | Seconds to wait (default: 30) |
 | **apps** | |
-| `apps[].name` | App name (used for logs and PID tracking) |
+| `apps[].name` | App name — used in logs and PID tracking |
 | `apps[].path` | Working directory relative to project root |
 | `apps[].command` | Command to start the app |
-| `apps[].port` | Port the app listens on. Set to `"auto"` to assign a free port dynamically (range 4000–4999) |
+| `apps[].port` | Port the app listens on. `"auto"` assigns a free port (4000–4999) |
 | `apps[].health` | URL to poll for health check |
-| `apps[].env` | Extra environment variables |
+| `apps[].env` | Extra environment variables for this app |
 | **agent** | |
-| `agent.description` | Project description included in AI agent context |
-| `agent.conventions` | Coding conventions for AI agents to follow |
-| `agent.targets` | Files to write agent context to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`) |
-| `agent.references` | Git repos to clone as AI context. String (URL) or object (`url` + `include` paths) |
-| `agent.soul.identity` | Freeform paragraph defining who the agent is in this project |
-| `agent.soul.values` | Core values the agent should prioritize |
+| `agent.description` | Project description included in agent context |
+| `agent.conventions` | Coding conventions for agents to follow |
+| `agent.targets` | Files to write to (default: `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `copilot-instructions.md`) |
+| `agent.soul.identity` | Freeform paragraph — who the agent is in this project |
+| `agent.soul.values` | What the agent should prioritize |
 | `agent.soul.boundaries` | Hard limits on agent behavior |
-| `agent.soul.voice` | Communication style guidelines |
-| `agent.skills.paths` | Additional directories to scan for SKILL.md files (auto-detected: `skills/`, `.codex/skills/`, `.cursor/skills/`) |
+| `agent.soul.voice` | Communication style |
+| `agent.skills.paths` | Extra directories to scan for `SKILL.md` files |
+| `agent.references` | Git repos to clone as context. String (URL) or object with `url` + `include` |
 | **editor** | |
 | `editor.tasks[].name` | Task label shown in the editor |
 | `editor.tasks[].command` | Shell command to run |
 | `editor.tasks[].cwd` | Working directory relative to project root |
-| `editor.tasks[].group` | Task group: `"build"` or `"test"` |
+| `editor.tasks[].group` | `"build"` or `"test"` |
 | `editor.targets` | Editor directories to write to (default: `[".vscode", ".zed"]`) |
 | **hub** | |
 | `hub.ci.on` | Trigger events (default: `["push", "pull_request"]`) |
-| `hub.ci.node` | Node.js version (auto-detected from `.nvmrc`/engines if omitted) |
+| `hub.ci.node` | Node.js version (auto-detected from `.nvmrc`/`engines` if omitted) |
 | `hub.ci.steps[].name` | CI step display name |
 | `hub.ci.steps[].run` | Shell command to run |
 | `hub.targets` | Hub directories to write to (default: `[".github", ".forgejo"]`) |
 | **team** | |
 | `team.url` | Git URL (SSH or HTTPS) of the team profile repo |
-| `team.required` | If true, Boot fails when the team profile can't be resolved |
+| `team.required` | If `true`, Boot fails when the profile can't be resolved |
 | `team.branch` | Branch to track (default: `main`) |
 
-## What `boot init` Auto-Detects
+---
 
-- **Package manager** — from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`)
-- **Docker Compose** — `docker-compose.yml` / `compose.yml`
-- **Raw Docker containers** — scans `scripts/*.sh` for `docker start` / `docker run` patterns
-- **Database services** — Postgres, MySQL, Redis (with appropriate readiness checks)
-- **Monorepo apps** — scans `apps/*/package.json` for dev scripts
-- **Sub-directory apps** — detects `dashboard/`, `frontend/`, `backend/`, `server/`, etc.
-- **Single-app projects** — detects `dev` or `start` scripts in root `package.json`
-- **Editor tasks** — detects common scripts (`dev`, `build`, `test`, `lint`, `start`, `format`, `typecheck`) from `package.json`
-- **Hub CI steps** — detects CI-relevant scripts (`lint`, `test`, `build`, `typecheck`) from `package.json`; detects Node version from `.nvmrc`, `.node-version`, or `engines`
-- **Python / uv** — detects `pyproject.toml` or `uv.lock` and adds `uv sync` to setup (or `pip install -e .` when only `requirements.txt` is present)
-- **Build-before-run** — if `dashboard/`, `frontend/`, `web/`, `client/`, or `admin/` has a `build` script, adds `cd <dir> && <pm> install && <pm> run build` to setup so the main app can assume the bundle is built
-- **Python main app** — when `pyproject.toml` has `[project.scripts]` (or uses project name), adds a primary app with `uv run <script>` and a known port when applicable (e.g. exo → 52415)
-- **Prisma** — detects `prisma/` directory and adds generate/push to setup
-- **Ports** — guesses 3000 for web/frontend, 3001 for api/server
-- **`.env` requirements** — parses `env.example` / `.env.example` for required and sensitive vars
-- **AI agent files** — detects `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.windsurfrules`, etc.
+## Auto-Detection
 
-## What Each Command Does
+`boot init` and `boot agent init` detect the following without any config:
+
+**Package manager** — from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `package-lock.json`)
+
+**Docker** — `docker-compose.yml` / `compose.yml`; also scans `scripts/*.sh` for `docker start` / `docker run` patterns
+
+**Database services** — Postgres, MySQL, Redis with appropriate readiness checks
+
+**Apps** — monorepo `apps/*/package.json`; sub-directories (`dashboard/`, `frontend/`, `backend/`, `server/`); single-app root `dev`/`start` scripts
+
+**Stack (30+ technologies)** — Next.js, Nuxt, React, Vue, SvelteKit, SolidJS, Express, Fastify, Hono, NestJS, Elysia, Prisma, Drizzle, TypeORM, Mongoose, Supabase, tRPC, GraphQL, Zod, Vitest, Jest, Playwright, Cypress, TypeScript, Tailwind CSS, Turborepo, Nx, Python, Go, Rust
+
+**Tooling** — `dev`, `build`, `test`, `lint`, `start`, `format`, `typecheck` scripts from `package.json`; Node version from `.nvmrc`, `.node-version`, or `engines`
+
+**Prisma** — detects `prisma/` and adds generate/push to setup
+
+**Ports** — guesses 3000 for web/frontend, 3001 for api/server
+
+**Env requirements** — parses `env.example` / `.env.example`
+
+**Existing agent files** — `.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.windsurfrules`, etc. (content is preserved and included in generated output)
+
+**Python / uv** — detects `pyproject.toml` or `uv.lock`, adds `uv sync` to setup
+
+**Build-before-run** — if a frontend directory has a `build` script, adds it to setup so the main app can assume the bundle is ready
+
+---
+
+## Command Details
 
 ### `boot up`
 
 1. Checks prerequisites (Node.js 18+, Docker if needed)
-2. Auto-creates `.env` from template (`env.example` / `.env.example`) if missing
-3. Validates `.env` file (required vars, rejects default secrets)
+2. Auto-creates `.env` from `env.example` / `.env.example` if missing
+3. Validates `.env` (required vars, rejects default secrets)
 4. Ensures package manager is available (auto-enables pnpm/yarn via corepack)
 5. Auto-installs root deps if `node_modules` is missing
 6. Auto-installs per-app deps in monorepo sub-apps
@@ -240,458 +231,199 @@ hub:
 11. Polls health URLs until ready
 12. Prints summary with URLs
 
-#### `boot up --attach` / `boot up -a`
-
-Same as `boot up` but after starting, streams all app logs to your terminal (color-coded by service). Press Ctrl+C to detach. Services keep running in the background.
+```bash
+boot up               # start everything, exit immediately
+boot up --attach      # start + stream logs; Ctrl+C detaches (services keep running)
+boot up -a            # same as --attach
+```
 
 ### `boot dev`
 
-Interactive development mode — the closest replacement for your old `start.sh` scripts:
-
-1. Starts Docker services
-2. Starts all apps
-3. Streams live, color-coded logs for every service
-4. **Ctrl+C gracefully stops everything** (apps + Docker)
-
-This is the "one terminal" experience. No separate tabs needed.
+Same startup sequence as `boot up`, then streams live color-coded logs for every service. Ctrl+C gracefully stops everything (apps + Docker). The "one terminal" replacement for `start.sh`.
 
 ### `boot down`
 
-1. Stops all tracked app processes (SIGTERM → SIGKILL)
-2. Falls back to `pkill -f` if PID file is stale (catches orphan processes)
+1. Stops tracked app processes (SIGTERM → SIGKILL)
+2. Falls back to `pkill -f` for orphan process cleanup
 3. Force-kills anything still holding app ports
 4. Stops standalone Docker containers
 5. Stops Docker Compose services
 
 ### `boot status`
 
-Shows a table of all services with:
-- Status (running / stopped / port in use)
-- Port numbers
-- PIDs (with mismatch warnings if PID file ≠ port owner)
-- Process name (what binary is actually running, e.g. `node`, `nuxt`)
-- Live health checks (curl for apps, `pg_isready` / `redis-cli ping` for DBs)
-- Log file paths
+Shows a table with: status, port, PID, process name, live health check result, log file path. PID mismatches (PID file ≠ port owner) are flagged with a warning.
 
-Pass `--json` for machine-readable output (useful for editor/tool integrations).
+```bash
+boot status           # table output
+boot status --json    # machine-readable
+```
 
 ### `boot clean`
 
-Nukes everything for a fresh start:
-1. Removes `node_modules` in root and all sub-apps
-2. Removes lockfiles (`package-lock.json`, `yarn.lock`)
-3. Removes caches (`.nuxt`, `.next`, `.turbo`, `.vite`, `.parcel-cache`)
-4. Removes build outputs (`dist/`, `build/`)
-5. Removes `.boot/` runtime data (PIDs, logs)
-6. Pass `--all` to also remove `pnpm-lock.yaml`
+Removes `node_modules` (root + sub-apps), lockfiles (`package-lock.json`, `yarn.lock`), caches (`.nuxt`, `.next`, `.turbo`, `.vite`, `.parcel-cache`), build outputs (`dist/`, `build/`), and `.boot/` runtime data. Pass `--all` to also remove `pnpm-lock.yaml`.
 
 ### `boot logs`
 
-View logs for any service:
 ```bash
-boot logs                    # show recent logs for all services
-boot logs api                # show logs for a specific service
-boot logs api -f             # follow mode (like tail -f)
+boot logs                    # recent logs for all services
+boot logs api                # specific service
+boot logs api -f             # follow mode
 boot logs api -n 100         # last 100 lines
-boot logs postgres           # Docker container logs too
+boot logs postgres           # Docker container logs
 ```
 
 ### `boot setup`
 
-One-time setup with smart Prisma handling:
-1. Checks prerequisites (Node.js, Docker)
-2. Auto-creates `.env` from template
-3. Starts Docker services (DB needs to be up for migrations)
-4. Runs configured setup commands
-5. Smart Prisma: generate client + migrations with fallback (`migrate deploy` → `db push`)
-6. Non-fatal seed failures (skips gracefully)
+One-time setup with smart Prisma handling: starts Docker services, runs configured setup commands, runs `migrate deploy` → `db push` fallback. Seed failures are non-fatal.
 
-### `boot reboot`
-
-Runs `down` then `up`.
-
-## AI Agent Context
-
-Boot can generate and manage AI agent instruction files for Cursor, GitHub Copilot, Claude Code, and Codex. One source of truth, synced to every tool.
-
-### Why
-
-Every AI coding tool wants its own instruction file (`.cursorrules`, `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md`). Without Boot, you maintain near-identical files by hand. They go stale. New projects start from scratch.
-
-Boot solves this: it already knows your stack, so it generates agent context automatically and writes to all targets at once.
-
-### `boot agent init`
-
-Generate agent context from your project stack and sync to all target files. Boot **uses existing agent files** (e.g. `.cursorrules`, `AGENTS.md`) when present: their content is included in the generated output, and **existing target files are not overwritten** — only missing targets are created. Use `--overwrite` to replace existing files.
-
-```bash
-boot agent init
-# ▶ Stack: Next.js, Hono, Prisma, tRPC, Zod, Vitest, TypeScript, Tailwind CSS, Turborepo
-# ✓ Wrote .github/copilot-instructions.md
-# Skipped existing (use --overwrite to replace): .cursorrules, AGENTS.md, CLAUDE.md
-```
-
-Works with or without `boot.yaml`. With a config, you get richer output (apps, services, env requirements, conventions). Without one, Boot still auto-detects your stack from `package.json`.
-
-### `boot agent sync`
-
-Regenerate and sync after editing `boot.yaml`. Same as init: existing target files are skipped unless you pass `--overwrite`.
-
-```bash
-boot agent sync          # regenerate; only write to missing targets
-boot agent sync --no-global  # exclude personal conventions
-boot agent sync --overwrite  # replace existing agent files
-```
-
-### `boot agent check`
-
-Validate that target files are in sync with your config. Exits with code 1 if anything is stale or missing. Use it in CI or as a pre-commit hook:
-
-```bash
-boot agent check
-# ✓ .cursorrules — in sync
-# ✓ AGENTS.md — in sync
-# ⚠ CLAUDE.md — out of date
-# Run `boot agent sync` to update all targets.
-```
-
-### `boot agent remember`
-
-Save conventions and patterns to a global store (`~/.boot/agent/`) that carries across all your projects:
-
-```bash
-boot agent remember "Always validate API inputs with zod schemas"
-boot agent remember "Use early returns for guard clauses"
-boot agent remember "Prefer named exports over default exports"
-```
-
-These show up automatically in every future `boot agent init` / `boot agent sync` under the "Conventions" section.
-
-### `boot agent save`
-
-Push your project's conventions to the global store so they apply to all future projects:
-
-```bash
-boot agent save
-# ✓ Saved 3 conventions to global store
-# Location: ~/.boot/agent/conventions.md
-```
-
-### `boot agent status`
-
-See what Boot knows about your project's agent context:
-
-```bash
-boot agent status
-# ▶ Stack: Next.js, Prisma, TypeScript
-# ▶ Agent files: .cursorrules, AGENTS.md, CLAUDE.md
-# ▶ Config: boot.yaml has agent section
-# ▶ Global: 3 conventions, 3 remembered patterns
-# ✓ 4 target(s) in sync
-```
-
-Pass `--json` for machine-readable output.
-
-### Cross-Project Transfer
-
-Your global conventions travel with you. When you start a new project and run `boot agent init`, your personal conventions and remembered patterns are automatically included.
-
-You can also import directly from another project:
-
-```bash
-boot agent init --from ~/other-project
-# ✓ Imported 5 conventions to global store
-# ✓ Wrote .cursorrules
-# ✓ Wrote AGENTS.md
-# ...
-```
-
-### How It Works
-
-Three sources merge into one output:
-
-```
-~/.boot/agent/               boot.yaml agent:           auto-detection
-(personal, travels           (project-specific,         (stack, frameworks,
- with you)                    committed to repo)         structure)
-       │                           │                          │
-       └───────────────────────────┼──────────────────────────┘
-                                   ▼
-                         boot agent init / sync
-                                   │
-               ┌───────────────────┼───────────────────┐
-               ▼                   ▼                   ▼
-         .cursorrules         AGENTS.md           CLAUDE.md
-                                                       ▼
-                                        .github/copilot-instructions.md
-```
-
-### Generated Output
-
-Boot generates three separate files, each serving a distinct purpose:
-
-| File | Purpose | Generated when |
-|---|---|---|
-| `.cursorrules` / `AGENTS.md` / `CLAUDE.md` / `copilot-instructions.md` | Project context — stack, structure, conventions | Always |
-| `SOUL.md` | AI identity — role, values, boundaries, voice | When `agent.soul` is defined |
-| Skills section in agent context | Names and descriptions of detected skills | When skills are found in project |
-
-**Agent context** (`.cursorrules`, etc.) includes:
-
-- **Stack** — detected frameworks, tools, package manager
-- **Project Structure** — apps with paths and ports
-- **Services** — Docker services (Postgres, Redis, etc.)
-- **Tooling** — actionable commands: test runner, linter, formatter, DB migrations, dev server
-- **Environment** — required env vars
-- **Conventions** — all conventions merged into one list (project, team, personal, remembered)
-- **Skills** — detected skills with names and descriptions
-- **References** — content from repos listed in `agent.references`
-
-### Soul — AI Identity
-
-Inspired by the [soul document](https://soul.md/) concept. Define who the AI agent is in your project, not rules about what code to write, but identity, values, and how the agent relates to the team.
-
-```yaml
-agent:
-  soul:
-    identity: "You are a senior fullstack engineer working on an e-commerce platform. You care deeply about code quality and user experience."
-    values:
-      - Correctness over speed — get it right, not just working
-      - Ask before making breaking changes
-      - Type safety is non-negotiable
-    boundaries:
-      - Never modify production configs directly
-      - Always run tests before marking work as complete
-      - Don't commit secrets or .env files
-    voice:
-      - Be direct and concise
-      - Show code, don't just explain
-      - When uncertain, say so — don't guess
-```
-
-`SOUL.md` is only generated when `agent.soul` is defined — identity is intentional, not auto-detected.
-
-| Field | Description |
-|---|---|
-| `soul.identity` | Freeform paragraph — the "who you are" statement |
-| `soul.values` | What the agent should prioritize |
-| `soul.boundaries` | Hard limits on behavior |
-| `soul.voice` | Communication style |
-
-Team profiles can define soul fields. Identity uses project if set, else team. Values, boundaries, and voice concatenate (team base + project additions).
-
-### Skills — Detect & Sync
-
-Boot doesn't generate skills. It detects existing skills that follow the [Agent Skills](https://agentskills.io/) standard and includes their metadata in the generated agent context.
-
-Each skill is a directory containing a `SKILL.md` with YAML frontmatter (`name` and `description`), and optionally `scripts/`, `references/`, and `assets/` subdirectories:
-
-```
-skills/
-├── cloudflare-deploy/
-│   ├── SKILL.md
-│   ├── scripts/
-│   └── references/
-├── github/
-│   └── SKILL.md
-└── coding-agent/
-    └── SKILL.md
-```
-
-**Auto-detection:** Boot scans these directories by default:
-- `skills/`
-- `.codex/skills/`
-- `.cursor/skills/`
-
-**Custom paths:** Add extra scan directories in `boot.yaml`:
-
-```yaml
-agent:
-  skills:
-    paths:
-      - my-skills/
-      - shared/workflows/
-```
-
-**What Boot does with detected skills:**
-- Parses the `name` and `description` from each `SKILL.md` frontmatter
-- Includes a "Skills" section in all generated agent context files listing available skills with their descriptions and paths
-- AI tools can then read the full `SKILL.md` when they need to use a skill
-
-**Team skill syncing:** If your team profile repo contains a `skills/` directory, Boot copies those skill directories into your project's `skills/` directory during `boot agent init` and `boot agent sync`. Existing project skills are never overwritten — use `--overwrite` to replace them.
-
-Skills are human-authored capabilities, things like deploying to Cloudflare, managing GitHub issues, or running coding agents. They are not auto-generated task lists. See [agentskills.io](https://agentskills.io/) and [OpenClaw skills](https://github.com/openclaw/openclaw/tree/main/skills) for examples.
-
-### References
-
-Point your agent context at any git repo. Boot clones it to a global cache (`~/.boot/references/`), keeps it updated (auto-pull every 10 minutes), and includes the content in the generated agent markdown.
-
-**Short form**, just a URL, includes the README:
-
-```yaml
-agent:
-  references:
-    - git@github.com:Effect-TS/effect.git
-    - https://github.com/drizzle-team/drizzle-orm.git
-```
-
-**Long form** — specify exactly what to include:
-
-```yaml
-agent:
-  references:
-    - url: git@github.com:Effect-TS/effect.git
-      include:
-        - docs/
-        - packages/effect/README.md
-        - packages/effect/src/index.ts
-```
-
-`include` accepts files and directories. Directories are walked recursively and all text files are included. This lets you pull in exactly the docs, types, or source your AI tools need.
-
-**Limits:** Individual files are capped at 15,000 characters, total content per reference at 50,000 characters. Binary files and `node_modules` are skipped. Team profiles can also define references, they get merged with project references (deduplicated by URL, project entries win).
-
-### Stack Detection
-
-Boot auto-detects 30+ technologies from your `package.json` (root + monorepo sub-apps):
-
-Next.js, Nuxt, React, Vue, SvelteKit, SolidJS, Express, Fastify, Hono, NestJS, Elysia, Prisma, Drizzle, TypeORM, Mongoose, Supabase, tRPC, GraphQL, Zod, Vitest, Jest, Playwright, Cypress, TypeScript, Tailwind CSS, Turborepo, Nx, Python, Go, Rust.
-
-## Development Workflow
-
-```bash
-# Option 1: Background (CI-friendly, scriptable)
-boot up               # starts everything, exits immediately
-boot logs api -f      # follow one service's logs in another terminal
-boot down             # stop when done
-
-# Option 2: Attach (start background + watch logs)
-boot up --attach      # starts everything, streams logs; Ctrl+C detaches (services stay up)
-boot down             # stop when done
-
-# Option 3: Interactive (replaces start.sh)
-boot dev              # starts everything + live logs; Ctrl+C stops everything
-```
-
-## Docker Support
-
-Boot handles two styles of Docker usage:
-
-### Docker Compose
-For projects with a `docker-compose.yml`:
-- `boot up` runs `docker compose up -d`
-- Detects port conflicts and auto-remaps to free ports
-- Reuses existing containers when possible
-
-### Standalone Containers
-For projects that use raw `docker run` (no compose):
-- Starts existing stopped containers with `docker start`
-- Creates new containers with `docker run -d` if needed
-- Port conflict detection + auto-remap
+---
 
 ## Process Management
 
-- App processes run in the background (detached)
-- PIDs are stored in `.boot/pids/`
-- Logs are written to `.boot/logs/`
-- `boot down` kills the full process tree (not just the parent)
-- Falls back to `pkill -f` for orphan process cleanup
+- App processes run detached in the background
+- PIDs stored in `.boot/pids/`, logs in `.boot/logs/`
+- `boot down` kills the full process tree (not just the parent PID)
+- Falls back to `pkill -f` for orphan cleanup
 - Ports are freed before starting if occupied
 
-### Auto Port Assignment
+Add `.boot/` to your `.gitignore`.
 
-Set `port: auto` in `boot.yaml` and Boot picks a free port in the 4000–4999 range at startup:
+### Auto port assignment
 
 ```yaml
 apps:
   - name: web
     command: pnpm dev
-    port: auto
+    port: auto               # picks free port in 4000–4999
 ```
 
-The resolved port is persisted in `.boot/ports/` so `boot status` and `boot down` can reference it. The `PORT` environment variable is set automatically for the child process.
+The resolved port is stored in `.boot/ports/` and set as `PORT` env var for the child process.
 
-### Framework Port Injection
+### Framework port injection
 
-Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ignore the `PORT` environment variable. When Boot detects one of these in your app command — either directly or by resolving the underlying script from `package.json`, it automatically appends the correct `--port` (and `--host` where needed) flags so the app listens on the port Boot assigned.
+Some frameworks (Vite, Astro, Angular CLI, Webpack Dev Server, React Router) ignore `PORT`. Boot detects these from the command or the underlying `package.json` script and appends the correct `--port` / `--host` flags automatically.
 
-This works for both explicit ports and `port: auto`. No config needed. Boot handles the detection and injection transparently.
+### `.localhost` proxy
 
-### `.localhost` Proxy
-
-Boot runs a reverse proxy on port 1355 that gives every app a stable, named URL:
+Boot runs a reverse proxy on port 1355:
 
 ```
 api  → http://api.localhost:1355
 web  → http://web.localhost:1355
-docs → http://docs.localhost:1355
 ```
 
-The proxy starts automatically with `boot dev` and `boot up`. No config, no `/etc/hosts` editing — `*.localhost` resolves to `127.0.0.1` in all modern browsers per RFC 6761.
+No `/etc/hosts` editing — `*.localhost` resolves to `127.0.0.1` per RFC 6761. The proxy handles HTTP and WebSocket (HMR, live-reload). Visit `http://localhost:1355` for a status page. Falls back to `localhost:<port>` if port 1355 is taken.
 
-**Why this matters:**
-- URLs survive restarts — auto-assigned ports change, names don't
-- One port to remember across all projects (1355)
-- Cookies and localStorage isolate per app name (no cross-app bleed)
-- AI agents can use stable URLs instead of guessing ports
-- Visit `http://localhost:1355` for a status page listing all registered apps
+---
 
-The proxy handles HTTP and WebSocket upgrades (HMR, live-reload) transparently. If port 1355 is already in use, Boot falls back to showing direct `localhost:<port>` URLs.
+## Agent Sync Details
 
-Add `.boot/` to your `.gitignore`.
+### How the merge works
 
-## Editor Config
+Three sources combine into one output:
 
-Boot syncs editor tasks from one source in `boot.yaml` to multiple editors. Define tasks once, generate `.vscode/tasks.json` and `.zed/tasks.json`. One source, many targets, same philosophy as agent sync.
+```
+~/.boot/agent/         boot.yaml agent:        auto-detection
+(personal)             (project)               (stack, tools)
+      └──────────────────────┴──────────────────────┘
+                             ▼
+                   boot agent init / sync
+                             │
+          ┌──────────────────┼──────────────────┐
+          ▼                  ▼                  ▼
+    .cursorrules         AGENTS.md          CLAUDE.md
+                                    copilot-instructions.md
+```
 
-### Config
+Existing target files are **never overwritten** unless you pass `--overwrite`. Boot only creates missing targets.
 
-Add an `editor` section to `boot.yaml`:
+### Generated content
+
+Each target file includes:
+
+- **Stack** — detected frameworks and tools
+- **Project structure** — apps with paths and ports
+- **Services** — Docker services (Postgres, Redis, etc.)
+- **Tooling** — test runner, linter, formatter, DB commands, dev server
+- **Environment** — required env vars
+- **Conventions** — merged from project, team, and personal stores
+- **Skills** — detected skills with names and descriptions
+- **References** — content fetched from repos in `agent.references`
+
+`SOUL.md` is generated only when `agent.soul` is defined.
+
+### References — limits
+
+Individual files are capped at 15,000 characters. Total content per reference is capped at 50,000 characters. Binary files and `node_modules` are skipped. Repos are cached at `~/.boot/references/` and auto-refreshed every 10 minutes.
+
+### Skills — detection paths
+
+Boot auto-scans: `skills/`, `.codex/skills/`, `.cursor/skills/`. Add custom paths via `agent.skills.paths`. Each skill must be a directory with a `SKILL.md` containing `name` and `description` in YAML frontmatter.
+
+If your team profile repo has a `skills/` directory, Boot copies those into your project on `boot agent init` / `boot agent sync`. Existing project skills are never overwritten.
+
+---
+
+## Team Profiles
+
+The team repo contains its own `boot.yaml` with the fields you want to enforce:
 
 ```yaml
-editor:
-  tasks:
-    - name: dev
-      command: pnpm dev
-      cwd: apps/web          # optional, relative to project root
-      group: build            # optional: "build" or "test"
-    - name: test
-      command: pnpm test
-      group: test
-    - name: lint
-      command: pnpm lint
-  targets:                    # default: [".vscode", ".zed"]
-    - .vscode
-    - .zed
+# company/boot-standards/boot.yaml
+env:
+  reject:
+    JWT_SECRET:
+      - your-super-secret-jwt-key-change-this
+
+agent:
+  conventions:
+    - Use conventional commits for PR titles
+    - Never commit secrets or .env files
+    - Always run tests before pushing
 ```
 
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `tasks[].name` | yes | — | Task label shown in the editor |
-| `tasks[].command` | yes | — | Shell command to run |
-| `tasks[].cwd` | no | project root | Working directory relative to project root |
-| `tasks[].group` | no | — | `"build"` or `"test"` (maps to editor-specific grouping) |
-| `targets` | no | `[".vscode", ".zed"]` | Editor directories to write to |
+### Merge strategy
+
+| Field | Strategy |
+|---|---|
+| `name` | Always project |
+| `packageManager` | Project if set, else team |
+| `setup` | Team first, then project (concatenate, deduplicate) |
+| `env.required` | Concatenate + deduplicate |
+| `env.reject` | Deep merge — both apply, project overrides per-key |
+| `docker` | Project wins (too project-specific) |
+| `apps` | Project wins (too project-specific) |
+| `agent.description` | Project if set, else team |
+| `agent.conventions` | Team first, then project (concatenate, deduplicate) |
+| `agent.targets` | Project if set, else team |
+| `agent.soul.identity` | Project if set, else team |
+| `agent.soul.values/boundaries/voice` | Concatenate (team base + project additions) |
+| `team` | Always project (no nested team refs) |
+
+### Caching
+
+Cloned to `~/.boot/teams/<url-hash>/`. Auto-pulled when cache is older than 10 minutes. `boot team sync` forces an immediate pull. On pull failure, Boot uses the cached version silently — unless `required: true` is set and no cache exists.
 
 ### Commands
 
 ```bash
-boot editor init               # detect tasks from package.json, write to targets
-boot editor sync               # regenerate after editing boot.yaml
-boot editor check              # verify targets are in sync (CI-friendly)
+boot team set <url>             # add to boot.yaml + clone
+boot team set <url> --branch develop --required
+boot team sync                  # force pull latest
+boot team check                 # CI: verify profile is applied
+boot team status                # show what the profile includes
+boot team remove                # remove from boot.yaml + clear cache
 ```
 
-Options:
+---
 
-```bash
-boot editor init --overwrite   # overwrite existing editor config files
-boot editor sync --overwrite   # overwrite existing editor config files
-```
+## Editor and Hub Config
 
-### Generated Output
+Both follow the same pattern: define once in `boot.yaml`, generate to multiple targets.
 
-**VS Code** — `.vscode/tasks.json`:
+### Editor — generated output
 
+**`.vscode/tasks.json`:**
 ```json
 {
   "version": "2.0.0",
@@ -708,220 +440,268 @@ boot editor sync --overwrite   # overwrite existing editor config files
 }
 ```
 
-**Zed** — `.zed/tasks.json`:
+**`.zed/tasks.json`:**
+```json
+[{ "label": "dev", "command": "pnpm dev", "cwd": "apps/web", "tags": ["build"] }]
+```
+
+```bash
+boot editor init               # detect from package.json, write targets
+boot editor sync               # regenerate from boot.yaml
+boot editor check              # CI: verify in sync
+boot editor init --overwrite   # replace existing files
+```
+
+### Hub — generated output
+
+Both `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml` receive the same content. For pnpm projects, Boot adds `pnpm/action-setup@v4` automatically.
+
+```bash
+boot hub init                  # detect from package.json, write workflows
+boot hub sync                  # regenerate from boot.yaml
+boot hub check                 # CI: verify in sync
+boot hub init --overwrite      # replace existing files
+```
+
+---
+
+## Session Tracking — Full Reference
+
+### Storage layout
+
+```
+.openboot/
+  sessions/
+    active/           ← sessions created via boot session start or boot run
+    imported/         ← sessions pulled from local tool history files
+      .manifest.json  ← deduplication tracker (prevents re-importing the same file)
+  tasks/              ← one JSON file per task
+  snapshots/          ← continuity checkpoints
+  context/
+    latest-context.md ← rebuilt by boot context build
+  sync/
+    config.json       ← sync provider config
+    daemon.json       ← background daemon config
+  exports/            ← written by boot session export
+  bundles/            ← portable bundle files
+
+~/.openboot/
+  workspaces/         ← global workspace definitions
+  .openboot-daemon.json  ← daemon runtime state
+```
+
+### Session schema
 
 ```json
-[
-  {
-    "label": "dev",
-    "command": "pnpm dev",
-    "cwd": "apps/web",
-    "tags": ["build"]
+{
+  "id": "uuid",
+  "createdAt": "ISO timestamp",
+  "updatedAt": "ISO timestamp",
+  "tool": "cursor | claude | cli | other",
+  "project": "repo-name",
+  "branch": "git-branch",
+  "task": "short description",
+  "status": "active | idle | imported | completed",
+  "taskId": "optional linked task uuid",
+  "snapshotIds": [],
+  "summary": "generated summary",
+  "git": {
+    "repoRoot": "/path/to/repo",
+    "repoName": "openboot",
+    "branch": "main",
+    "commit": "abc123",
+    "isDirty": true,
+    "changedFiles": ["src/foo.ts"],
+    "stagedFiles": []
+  },
+  "source": {
+    "type": "openboot | imported | wrapped",
+    "name": "cursor | claude | opencode | openai | manual"
+  },
+  "messages": [
+    { "role": "user | assistant | system", "content": "...", "timestamp": "..." }
+  ],
+  "events": [
+    { "id": "uuid", "type": "command | stdout | stderr | file-change | import | note", "timestamp": "...", "data": {} }
+  ],
+  "metadata": {
+    "filesTouched": [],
+    "commandsRun": [],
+    "rawSource": {}
   }
-]
+}
 ```
 
-### Auto-Detection
+Older session files are backward compatible — missing fields are backfilled with safe defaults on read.
 
-`boot editor init` scans `package.json` for common scripts (`dev`, `build`, `test`, `lint`, `start`, `format`, `typecheck`) and generates a task for each. It also creates per-app start tasks from `boot.yaml` apps.
+### Task schema
 
-## Hub Config
-
-Boot syncs CI workflows from one source in `boot.yaml` to multiple code hosts. Define your pipeline once, generate `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml`. Forgejo Actions uses GitHub Actions-compatible syntax, so the workflow content is the same, only the directory differs.
-
-### Config
-
-Add a `hub` section to `boot.yaml`:
-
-```yaml
-hub:
-  ci:
-    on: [push, pull_request]   # default: [push, pull_request]
-    node: "18"                 # auto-detected from .nvmrc/engines if omitted
-    steps:
-      - name: Install
-        run: pnpm install
-      - name: Lint
-        run: pnpm lint
-      - name: Test
-        run: pnpm test
-  targets:                     # default: [".github", ".forgejo"]
-    - .github
-    - .forgejo
+```json
+{
+  "id": "uuid",
+  "title": "Add branch-aware resume",
+  "description": "...",
+  "status": "open | active | paused | completed",
+  "repo": { "name": "openboot", "root": "/repo" },
+  "git": { "branch": "feature/sync", "commit": "abc123" },
+  "linkedSessionIds": [],
+  "linkedSnapshotIds": [],
+  "summary": "",
+  "tags": []
+}
 ```
 
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `ci.on` | no | `["push", "pull_request"]` | Trigger events |
-| `ci.node` | no | auto-detected or `"18"` | Node.js version for `actions/setup-node` |
-| `ci.steps[].name` | yes | — | Step display name |
-| `ci.steps[].run` | yes | — | Shell command to run |
-| `targets` | no | `[".github", ".forgejo"]` | Hub directories to write to |
-
-### Commands
+### All session commands
 
 ```bash
-boot hub init                  # detect CI steps from package.json, write workflows
-boot hub sync                  # regenerate after editing boot.yaml
-boot hub check                 # verify targets are in sync (CI-friendly)
+# Sessions
+boot session start --task "Add rate limiting" --tool cursor
+boot session resume [--json]
+boot session list
+boot session attach --role assistant --message "Implemented token bucket"
+boot session export <id>
+boot session import cursor
+boot session import claude
+boot session import opencode
+boot session import openai
+
+# Tasks
+boot task create
+boot task create --title "Add sync"
+boot task list
+boot task list --status open
+boot task resume <id>
+boot task close <id>
+boot task pause <id>
+
+# Snapshots
+boot snapshot create
+boot snapshot create --files "src/auth.ts,src/db.ts" --summary "Before refactor"
+boot snapshot list
+boot snapshot restore <id>
+
+# Context + resume
+boot resume
+boot resume --context
+boot resume --json
+boot context build
+boot context build --json
+boot context build --no-save
+boot continue
+
+# Timeline + replay
+boot timeline
+boot timeline --branch feature/sync
+boot timeline --task <id>
+boot timeline --limit 30
+boot timeline --json
+boot replay
+boot replay <id>
+boot replay --messages-only
+boot replay --events-only
+boot replay --json
+
+# Sync
+boot sync enable icloud
+boot sync enable dropbox-folder --path ~/Dropbox/MyOpenBoot
+boot sync status
+boot push
+boot sync pull
+boot sync disable
+
+# Daemon
+boot daemon start
+boot daemon start --interval 120
+boot daemon status
+boot daemon stop
+
+# Summaries
+boot summarize session
+boot summarize session <id>
+boot summarize task <id>
+boot summarize session --json
+
+# Sharing
+boot share create
+boot share create <artifactId>
+boot share list
+boot import bundle ./path/to/bundle.json
+
+# Workspaces
+boot workspace create myapp
+boot workspace create myapp --repo /path/to/backend --repo /path/to/frontend
+boot workspace add-repo <id> /path/to/repo
+boot workspace list
+boot workspace show <id>
+
+# Wrapped tools
+boot run claude
+boot run opencode --help
+boot watch
 ```
 
-Options:
+### Adapters — what's actually imported
 
-```bash
-boot hub init --overwrite      # overwrite existing workflow files
-boot hub sync --overwrite      # overwrite existing workflow files
-```
+Imports are best-effort and read local files only. No cloud API access for any tool.
 
-### Generated Output
-
-Both `.github/workflows/ci.yml` and `.forgejo/workflows/ci.yml` get the same content:
-
-```yaml
-name: CI
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-jobs:
-  ci:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-      - name: Install
-        run: pnpm install
-      - name: Lint
-        run: pnpm lint
-      - name: Test
-        run: pnpm test
-```
-
-For pnpm projects, Boot automatically adds the `pnpm/action-setup@v4` step.
-
-### Auto-Detection
-
-`boot hub init` scans `package.json` for CI-relevant scripts (`lint`, `test`, `build`, `typecheck`) and generates a step for each. Node version is detected from `.nvmrc`, `.node-version`, or `engines.node` in `package.json`.
-
-## Team Profiles
-
-Share a company-wide baseline across every repo. The team profile lives in a git repo and applies to the **whole tool**, setup commands, env rules, agent conventions, everything.
-
-### Config
-
-Add a `team` section to your project's `boot.yaml`:
-
-```yaml
-team:
-  url: git@github.com:company/boot-standards.git
-  required: true    # optional: fail if the profile can't be resolved
-  branch: main      # optional: defaults to main
-```
-
-| Field | Required | Default | Description |
-|---|---|---|---|
-| `url` | yes | — | Git URL (SSH or HTTPS) of the team profile repo |
-| `required` | no | `false` | If true, Boot refuses to run when the team profile can't be resolved |
-| `branch` | no | `main` | Branch to track |
-
-### Team Profile Repo
-
-The team repo contains a `boot.yaml` (or `boot.yml` / `boot.json`) with the shared baseline. It uses the same format as a project `boot.yaml` but typically only defines the fields you want to enforce across all repos:
-
-```yaml
-# Example: company/boot-standards/boot.yaml
-
-env:
-  reject:
-    JWT_SECRET:
-      - your-super-secret-jwt-key-change-this
-    API_KEY:
-      - changeme
-
-setup:
-  - npm run lint:check
-
-agent:
-  conventions:
-    - Use conventional commits for PR titles
-    - Never commit secrets or .env files
-    - Always run tests before pushing
-    - Write scripts in TypeScript, not bash
-  targets:
-    - .cursorrules
-    - AGENTS.md
-    - CLAUDE.md
-    - .github/copilot-instructions.md
-```
-
-### Commands
-
-```bash
-boot team set <url>     # add team.url to boot.yaml + clone the profile
-boot team sync          # force-pull the latest version
-boot team check         # verify the profile is applied and up to date (CI-friendly)
-boot team status        # show what the team profile includes
-boot team remove        # remove team.url from boot.yaml + clear cache
-```
-
-Options for `boot team set`:
-
-```bash
-boot team set <url> --branch develop    # track a specific branch
-boot team set <url> --required          # enforce: fail if unavailable
-```
-
-### How Merge Works
-
-When `loadConfig()` sees a `team.url`, it clones (or pulls) the team repo to `~/.boot/teams/<hash>/` and merges the team config as the base layer under the project config.
-
-**Merge strategy (field by field):**
-
-| Field | Strategy |
+| Source | What's read |
 |---|---|
-| `name` | Always project |
-| `packageManager` | Project if set, else team |
-| `setup` | Team first, then project (concatenate, deduplicate) |
-| `env.file` | Project if set, else team |
-| `env.required` | Concatenate + deduplicate |
-| `env.reject` | Deep merge (both apply, project overrides per-key) |
-| `docker` | Project wins entirely (too project-specific) |
-| `apps` | Project wins entirely (too project-specific) |
-| `agent.description` | Project if set, else team |
-| `agent.conventions` | Team first, then project (concatenate, deduplicate) |
-| `agent.targets` | Project if set, else team |
-| `team` | Always project (don't inherit nested team refs) |
+| `cursor` | Session/history JSON and JSONL from `~/.cursor` and `~/Library/Application Support/Cursor` |
+| `claude` | Transcripts from `~/.claude` and `~/.config/claude` |
+| `opencode` | History from `~/.opencode` |
+| `openai` | CLI artifacts from `~/.openai` and `~/.codex` — not cloud chat history |
 
-### Caching
+Duplicates are tracked in `.manifest.json` and skipped on re-import. Source files are never modified.
 
-The team repo is cloned to `~/.boot/teams/<url-hash>/` on first use. On subsequent runs, Boot auto-pulls if the cache is older than 10 minutes. Use `boot team sync` to force an immediate pull.
+### Branch-aware resume — selection priority
 
-If a pull fails (offline, auth issue), Boot uses the cached version silently. If `required: true` is set and no cached version exists, Boot fails with a clear error.
+1. Exact repo + branch match with an active session
+2. Active task on the same branch
+3. Most recently active task for this repo
+4. Most recently active session
 
-### CI Usage
+### Sync providers
 
-Add `boot team check` to your CI pipeline to verify the team profile is applied:
+| Provider | Path used |
+|---|---|
+| `icloud` | `~/Library/Mobile Documents/com~apple~CloudDocs/OpenBoot/` |
+| `dropbox-folder` | `~/Dropbox/OpenBoot/` (or `--path`) |
+| `google-drive-folder` | `~/Google Drive/My Drive/OpenBoot/` (or `--path`) |
+| `onedrive-folder` | `~/OneDrive/OpenBoot/` (or `--path`) |
+| `git` | Folder copy into a git-managed directory — not git push/pull |
+| `folder` | Any custom folder path |
 
-```yaml
-# GitHub Actions example
-- name: Verify team profile
-  run: boot team check
-```
+Conflict handling: if content differs on pull, the incoming file is saved as `.conflict.json` beside the original. Nothing is overwritten silently.
 
-### Agent Context
+Sync never includes `.env` files, SSH keys, API tokens, cloud credentials, or private keys.
 
-When generating agent markdown (`boot agent init` / `boot agent sync`), team conventions are merged into the single **Conventions** section with a `[team]` prefix so it's clear what comes from the team vs. the project.
+### AI summaries — providers
 
-## Programmatic / Tool Integration
+Set one of these environment variables to enable AI-generated summaries:
 
-Boot exposes machine-readable JSON output for editors, GUIs, and other tools that want to integrate.
+| Variable | Provider | Model |
+|---|---|---|
+| `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` |
+| `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5` |
+| `GEMINI_API_KEY` | Google | `gemini-2.0-flash` |
+
+The first configured provider is used. Without any key, deterministic summarization runs automatically — no network required.
+
+### Security rules
+
+- Bundles never include `.env`, `.pem`, `.key`, `id_rsa`, `id_ed25519`, credentials, or API tokens
+- The daemon self-disables after 3 consecutive errors
+- AI provider keys are read from environment variables only — never stored
+- Sync never transmits data through OpenBoot servers
+- Wrapper (`boot run`) captures env variable key names only — never values
+
+---
+
+## Programmatic Integration
 
 ### JSON Schema
 
-A JSON Schema for `boot.yaml` is published at [`schema.json`](schema.json) and included in the npm package. Point your editor at it for autocomplete and validation:
+A JSON Schema for `boot.yaml` is at [`schema.json`](schema.json). Add to your config for editor autocomplete:
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/treadiehq/openboot/main/schema.json
@@ -930,21 +710,26 @@ name: my-project
 
 ### `boot config`
 
-Dumps the fully resolved project config (with team profile merged) as JSON:
+Dumps the fully resolved config (team profile merged) as JSON:
 
 ```bash
-boot config            # resolved config (team + project merged)
-boot config --raw      # project config only (no team merge)
+boot config           # resolved (team + project merged)
+boot config --raw     # project config only
 ```
 
 ### `--json` flag
 
-`boot status` and `boot agent status` accept `--json` for structured output:
-
 ```bash
-boot status --json          # service status (type, port, health, pid, url)
+boot status --json          # service status: type, port, health, pid, url
 boot agent status --json    # stack, agent files, conventions, sync status
+boot session list --json
+boot task list --json
+boot timeline --json
+boot context build --json
+boot resume --json
 ```
+
+---
 
 ## License
 

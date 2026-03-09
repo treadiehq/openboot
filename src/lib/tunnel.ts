@@ -63,15 +63,17 @@ export function startTunnel(
     });
   }
 
-  // Background: spawn a child that uses the API and stays alive
+  // Background: spawn a child that uses the API and stays alive.
+  // Require only the tunnel submodule to avoid running private-connect's CLI (index.js runs CLI on load).
+  const mainPath = require.resolve("private-connect");
+  const tunnelPath = path.join(path.dirname(mainPath), "tunnel.js");
   return new Promise((resolve, reject) => {
-    const modPath = require.resolve("private-connect");
     const env = {
       ...process.env,
       BOOT_TUNNEL_PORT: String(port),
       BOOT_TUNNEL_PID_FILE: TUNNEL_PID_FILE,
       BOOT_TUNNEL_URL_FILE: TUNNEL_URL_FILE,
-      PRIVATE_CONNECT_MODULE: modPath,
+      PRIVATE_CONNECT_MODULE: tunnelPath,
     };
     const script = `
 const { createTunnel } = require(process.env.PRIVATE_CONNECT_MODULE);

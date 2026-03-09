@@ -66,6 +66,7 @@ program
   .command("up")
   .description("Start all services (Docker + apps)")
   .option("-a, --attach", "Attach to logs after starting (Ctrl+C detaches, services keep running)")
+  .option("-t, --tunnel", "Expose via Private Connect tunnel (shareable URL)")
   .action(async (opts) => {
     try {
       await up(opts);
@@ -78,9 +79,10 @@ program
 program
   .command("dev")
   .description("Start all services with live logs (Ctrl+C stops everything)")
-  .action(async () => {
+  .option("-t, --tunnel", "Expose via Private Connect tunnel (shareable URL)")
+  .action(async (opts) => {
     try {
-      await dev();
+      await dev(opts);
     } catch (err: any) {
       console.error(err.message);
       process.exit(1);

@@ -6,6 +6,7 @@ import { getAppStatus, logFile } from "../lib/process";
 import { isPortInUse } from "../lib/ports";
 import { log } from "../lib/log";
 import { isProxyRunning, PROXY_PORT } from "../lib/proxy";
+import { isTunnelRunning, getTunnelUrl } from "../lib/tunnel";
 
 const GREEN = "\x1b[32m";
 const RED = "\x1b[31m";
@@ -28,6 +29,8 @@ export interface ServiceStatus {
 export interface StatusResult {
   project: string;
   proxy: boolean;
+  tunnel: boolean;
+  tunnelUrl: string | null;
   services: ServiceStatus[];
 }
 
@@ -158,7 +161,9 @@ export function collectStatus(): StatusResult {
     }
   }
 
-  return { project: config.name, proxy: proxyUp, services };
+  const tunnelUp = isTunnelRunning();
+  const tunnelUrl = tunnelUp ? getTunnelUrl() : null;
+  return { project: config.name, proxy: proxyUp, tunnel: tunnelUp, tunnelUrl, services };
 }
 
 /**
@@ -212,6 +217,11 @@ export async function status(opts?: { json?: boolean }): Promise<void> {
   }
 
   log.table(rows);
+
+  if (result.tunnel && result.tunnelUrl) {
+    log.blank();
+    log.step(`Tunnel:  ${result.tunnelUrl} (share with anyone)`);
+  }
   log.blank();
 }
 

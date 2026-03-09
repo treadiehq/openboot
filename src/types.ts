@@ -28,6 +28,9 @@ export interface BootConfig {
 
   /** Team / company profile — shared config synced from a git repo */
   team?: TeamConfig;
+
+  /** When true, expose the dev proxy via a Private Connect tunnel (shareable URL). */
+  tunnel?: boolean;
 }
 
 export interface TeamConfig {

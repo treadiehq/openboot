@@ -3,6 +3,7 @@ import { stopDocker } from "../lib/docker";
 import { stopAllApps } from "../lib/process";
 import { log } from "../lib/log";
 import { stopProxyBackground } from "../lib/proxy";
+import { stopTunnel } from "../lib/tunnel";
 
 /**
  * `boot down` — stop all services.
@@ -12,10 +13,11 @@ export async function down(): Promise<void> {
   try {
     config = loadConfig();
   } catch {
-    // Even without config, try to stop any running apps and proxy
+    // Even without config, try to stop any running apps, proxy, and tunnel
     log.info("No boot.yaml found — stopping any tracked processes...");
     stopAllApps();
     stopProxyBackground();
+    stopTunnel();
     return;
   }
 
@@ -31,6 +33,9 @@ export async function down(): Promise<void> {
 
   // Stop proxy
   stopProxyBackground();
+
+  // Stop tunnel if one was started (e.g. boot up --tunnel)
+  stopTunnel();
 
   log.blank();
   log.success("All services stopped");

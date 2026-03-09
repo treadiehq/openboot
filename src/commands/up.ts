@@ -10,11 +10,12 @@ import { BootConfig } from "../types";
 import { checkPrerequisites } from "../lib/prereqs";
 import { tailAllLogs } from "../lib/tail";
 import { startProxyBackground } from "../lib/proxy";
+import { startTunnel } from "../lib/tunnel";
 
 /**
  * `boot up` — start all services.
  */
-export async function up(options: { attach?: boolean } = {}): Promise<void> {
+export async function up(options: { attach?: boolean; tunnel?: boolean } = {}): Promise<void> {
   const config = loadConfig();
   const projectRoot = process.cwd();
 
@@ -109,6 +110,19 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
     }
   }
 
+  // Optional: start Private Connect tunnel for shareable URL
+  const useTunnel = options.tunnel ?? config.tunnel === true;
+  let tunnelUrl: string | null = null;
+  if (useTunnel && proxyPort) {
+    try {
+      const result = await startTunnel(proxyPort, { inProcess: false });
+      tunnelUrl = result.url;
+    } catch (err: any) {
+      log.warn("Tunnel failed — ensure the private-connect package is available");
+      log.warn(err?.message ?? String(err));
+    }
+  }
+
   // Summary
   log.blank();
   log.header(`${config.name} is running`);
@@ -124,6 +138,10 @@ export async function up(options: { attach?: boolean } = {}): Promise<void> {
         log.step(`${app.name}: started`);
       }
     }
+  }
+
+  if (tunnelUrl) {
+    log.step(`Tunnel:  ${tunnelUrl} (share with anyone)`);
   }
 
   log.blank();

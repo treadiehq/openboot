@@ -314,6 +314,10 @@ web  → http://web.localhost:1355
 
 No `/etc/hosts` editing — `*.localhost` resolves to `127.0.0.1` per RFC 6761. The proxy handles HTTP and WebSocket (HMR, live-reload). Visit `http://localhost:1355` for a status page. Falls back to `localhost:<port>` if port 1355 is taken.
 
+### Tunnel (Private Connect)
+
+With `boot up --tunnel` or `tunnel: true` in `boot.yaml`, Boot starts a [Private Connect](https://github.com/treadiehq/private-connect) tunnel for the proxy port. You get a public URL (e.g. `https://abc123.privateconnect.co`) that forwards to your local stack — share it for demos or collaboration. No signup required. `boot down` stops the tunnel; `boot status` shows the tunnel URL when active.
+
 ---
 
 ## Agent Sync Details

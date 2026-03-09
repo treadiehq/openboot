@@ -7,13 +7,14 @@ import { log } from "../lib/log";
 import { checkPrerequisites } from "../lib/prereqs";
 import { tailAllLogs } from "../lib/tail";
 import { startProxy, stopProxy } from "../lib/proxy";
+import { startTunnel, stopTunnel } from "../lib/tunnel";
 
 /**
  * `boot dev` — interactive development mode.
  * Starts everything (docker + apps) and streams all logs in the foreground.
  * Ctrl+C gracefully stops all services.
  */
-export async function dev(): Promise<void> {
+export async function dev(options: { tunnel?: boolean } = {}): Promise<void> {
   const config = loadConfig();
   if (!config) return;
 
@@ -49,6 +50,9 @@ export async function dev(): Promise<void> {
 
     // Stop proxy
     stopProxy();
+
+    // Stop tunnel if one was started
+    stopTunnel();
 
     log.blank();
     log.success(`${config.name} stopped`);
@@ -94,6 +98,19 @@ export async function dev(): Promise<void> {
     }
   }
 
+  // Optional: start Private Connect tunnel for shareable URL
+  const useTunnel = options.tunnel ?? config.tunnel === true;
+  let tunnelUrl: string | null = null;
+  if (useTunnel && proxyPort) {
+    try {
+      const result = await startTunnel(proxyPort, { inProcess: true });
+      tunnelUrl = result.url;
+    } catch (err: any) {
+      log.warn("Tunnel failed — ensure the private-connect package is available");
+      log.warn(err?.message ?? String(err));
+    }
+  }
+
   // Summary
   log.blank();
   log.header(`${config.name} is running`);
@@ -109,6 +126,10 @@ export async function dev(): Promise<void> {
         log.step(`${app.name}: started`);
       }
     }
+  }
+
+  if (tunnelUrl) {
+    log.step(`Tunnel:  ${tunnelUrl} (share with anyone)`);
   }
 
   log.blank();

@@ -103,6 +103,15 @@ api  → http://api.localhost:1355
 web  → http://web.localhost:1355
 ```
 
+Share your stack with a tunnel URL (no VPN, no port forwarding):
+
+```bash
+boot up --tunnel
+# or in boot.yaml: tunnel: true
+```
+
+Boot uses [Private Connect](https://github.com/treadiehq/private-connect) to expose the proxy. You get a public URL (e.g. `https://abc123.privateconnect.co`) that anyone can open, same apps, same routes. `boot down` stops the tunnel.
+
 ```yaml
 env:
   required:
@@ -128,6 +137,9 @@ apps:
     path: apps/web
     command: pnpm dev
     port: auto
+
+# Optional: expose via shareable tunnel URL (Private Connect)
+# tunnel: true
 ```
 
 ---

@@ -1,8 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
 import { spawn } from "child_process";
-import { createTunnel } from "private-connect";
-import type { TunnelHandle } from "private-connect";
 
 const BOOT_DIR = ".boot";
 const PROXY_DIR = path.join(BOOT_DIR, "proxy");
@@ -22,7 +20,7 @@ function ensureProxyDir(): void {
 }
 
 /** In-process tunnel handle (used by boot dev --tunnel); closed on stopTunnel() */
-let inProcessHandle: TunnelHandle | null = null;
+let inProcessHandle: { url: string; close: () => Promise<void> } | null = null;
 
 export interface TunnelResult {
   url: string;
@@ -47,7 +45,13 @@ export function startTunnel(
   ensureProxyDir();
 
   if (inProcess) {
-    return createTunnel({ port }).then((handle) => {
+    // Load only the tunnel submodule so we never run private-connect's main CLI (index.js).
+    const tunnelPath = path.join(
+      path.dirname(require.resolve("private-connect")),
+      "tunnel.js"
+    );
+    const { createTunnel } = require(tunnelPath);
+    return createTunnel({ port }).then((handle: { url: string; close: () => Promise<void> }) => {
       inProcessHandle = handle;
       try {
         fs.writeFileSync(TUNNEL_URL_FILE, handle.url, "utf-8");
